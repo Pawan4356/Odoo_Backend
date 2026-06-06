@@ -6,6 +6,7 @@ const {
   getVendors,
   getVendorById,
   updateMyVendorProfile,
+  updateVendorStatus,
 } = require("../controllers/vendor.controller");
 const validate = require("../middlewares/validate.middleware");
 const authorize = require("../middlewares/authorize.middleware");
@@ -45,5 +46,11 @@ router.get(
   getVendors,
 );
 router.get("/:id", getVendorByIdValidators, validate, getVendorById);
+
+router.put(
+  "/:id/status",
+  authorize("Admin", "Manager"),
+  updateVendorStatus
+);
 
 module.exports = router;

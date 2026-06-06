@@ -111,6 +111,37 @@ exports.approveQuotation = async (req, res) => {
         "UPDATE quotations SET status = $1 WHERE rfq_id = $2 AND id != $3 AND status = $4",
         ["Rejected", quotation.rows[0].rfq_id, target_id, "Pending"],
       );
+
+      // Automatically generate Purchase Order
+      const qAmount = await db.query(
+        `SELECT SUM(qi.unit_price * ri.quantity) as total_amount
+         FROM quotation_items qi
+         JOIN rfq_items ri ON qi.rfq_item_id = ri.id
+         WHERE qi.quotation_id = $1`,
+        [target_id],
+      );
+      const total_amount = qAmount.rows[0]?.total_amount || 0;
+      if (total_amount > 0) {
+        const po_number = "PO-" + Date.now();
+        const po = await db.query(
+          "INSERT INTO purchase_orders (po_number, quotation_id, total_amount, created_by) VALUES ($1, $2, $3, $4) RETURNING id",
+          [po_number, target_id, total_amount, manager_id],
+        );
+
+        // Automatically generate Invoice (assuming 18% tax as default)
+        const tax_amount = total_amount * 0.18;
+        const invoice_total = parseFloat(total_amount) + tax_amount;
+        const invoice_number = "INV-" + Date.now();
+        await db.query(
+          "INSERT INTO invoices (invoice_number, purchase_order_id, total_amount, tax_amount) VALUES ($1, $2, $3, $4)",
+          [invoice_number, po.rows[0].id, invoice_total, tax_amount],
+        );
+
+        await db.query(
+          "INSERT INTO activity_logs (user_id, action, target_type, target_id) VALUES ($1, $2, $3, $4)",
+          [manager_id, `Purchase order ${po_number} generated via Approval`, "PO", po.rows[0].id],
+        );
+      }
     } else if (status === "Rejected") {
       await db.query("UPDATE quotations SET status = $1 WHERE id = $2", [
         "Rejected",

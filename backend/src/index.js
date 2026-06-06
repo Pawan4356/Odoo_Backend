@@ -10,6 +10,7 @@ const approvalRoutes = require('./routes/approval.routes');
 const poRoutes = require('./routes/po.routes');
 const activityRoutes = require('./routes/activity.routes');
 const reportRoutes = require('./routes/report.routes');
+const usersRoutes = require('./routes/users.routes');
 const authMiddleware = require('./middlewares/auth.middleware');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/approvals', authMiddleware, approvalRoutes);
 app.use('/api/pos', authMiddleware, poRoutes);
 app.use('/api/activity', authMiddleware, activityRoutes);
 app.use('/api/reports', authMiddleware, reportRoutes);
+app.use('/api/users', authMiddleware, usersRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });

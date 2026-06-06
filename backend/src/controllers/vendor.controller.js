@@ -156,3 +156,45 @@ exports.getVendorById = async (req, res) => {
     handleDbError(err, res);
   }
 };
+
+exports.updateVendorStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  if (!["Active", "Pending", "Removed", "Blacklisted"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status value." });
+  }
+
+  try {
+    await db.query("BEGIN");
+    
+    const result = await db.query(
+      "UPDATE vendors SET status = $1 WHERE id = $2 RETURNING user_id, company_name",
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      await db.query("ROLLBACK");
+      return res.status(404).json({ message: "Vendor not found" });
+    }
+
+    const { user_id, company_name } = result.rows[0];
+
+    if (status === "Blacklisted" || status === "Removed") {
+      await db.query("UPDATE users SET status = 'Inactive' WHERE id = $1", [user_id]);
+    } else if (status === "Active") {
+      await db.query("UPDATE users SET status = 'Active' WHERE id = $1", [user_id]);
+    }
+
+    await db.query(
+      "INSERT INTO activity_logs (user_id, action, target_type, target_id) VALUES ($1, $2, $3, $4)",
+      [req.user.id, `Vendor ${company_name} status updated to ${status}`, "VENDOR", id],
+    );
+
+    await db.query("COMMIT");
+    res.json({ message: `Vendor status updated to ${status}` });
+  } catch (err) {
+    await db.query("ROLLBACK");
+    handleDbError(err, res);
+  }
+};
