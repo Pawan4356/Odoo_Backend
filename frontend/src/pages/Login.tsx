@@ -3,29 +3,38 @@ import { useNavigate, Link } from "react-router-dom";
 import { AuthShell } from "../components/layout";
 import { ButtonPrimary, Field, TextInput } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { DEMO_USERS_BY_EMAIL } from "../data/mock";
+import { api } from "../api/client";
 import fullLogo from "../assets/full-logo.png";
 
 const Login = () => {
-  const { login } = useAuth();
+  const { login, vendorProfileComplete } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setError("Email and password are required.");
       return;
     }
-    const user = DEMO_USERS_BY_EMAIL[email.trim().toLowerCase()];
-    if (!user) {
-      setError("No account found with that email.");
-      return;
+    setLoading(true);
+    setError("");
+    try {
+      const session = await api.login(email.trim(), password);
+      login(session);
+      navigate(
+        session.user.role === "vendor" && !vendorProfileComplete
+          ? "/vendor-registration"
+          : "/dashboard",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in.");
+    } finally {
+      setLoading(false);
     }
-    login(user);
-    navigate("/dashboard");
   };
 
   return (
@@ -60,7 +69,7 @@ const Login = () => {
             )}
 
             <div className="flex justify-center mt-2">
-              <ButtonPrimary type="submit">Sign in</ButtonPrimary>
+              <ButtonPrimary type="submit">{loading ? "Signing in..." : "Sign in"}</ButtonPrimary>
             </div>
           </form>
         </div>

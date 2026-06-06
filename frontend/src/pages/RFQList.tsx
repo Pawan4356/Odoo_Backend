@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PageHeader,
@@ -9,17 +10,33 @@ import {
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { RFQS, VENDORS } from "../data/mock";
+import { api } from "../api/client";
 
 const RFQList = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   const role = user!.role;
   const isVendor = role === "vendor";
+  const [rfqs, setRfqs] = useState(RFQS);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    if (!token || isVendor) return;
+    api
+      .rfqs(token)
+      .then((rows) => {
+        setRfqs(rows);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load RFQs."))
+      .finally(() => setLoading(false));
+  }, [isVendor, token]);
 
   // Vendor sees only RFQs assigned to them (received only)
   const rows = isVendor
-    ? RFQS.filter((r) => r.vendorIds.includes("v-1"))
-    : RFQS;
+    ? rfqs.filter((r) => r.vendorIds.includes("v-1"))
+    : rfqs;
 
   return (
     <div>
@@ -36,6 +53,13 @@ const RFQList = () => {
           )
         }
       />
+
+      {loading && (
+        <p className="font-body text-[14px] text-ink-faint mb-3">Loading RFQs...</p>
+      )}
+      {loadError && (
+        <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
+      )}
 
       <Table
         head={
@@ -61,7 +85,9 @@ const RFQList = () => {
             <Td>
               <button
                 onClick={() =>
-                  navigate(isVendor ? "/quotations/submit" : "/quotations")
+                  navigate(isVendor ? "/quotations/submit" : "/quotations", {
+                    state: { rfqId: r.id },
+                  })
                 }
                 className="text-primary cursor-pointer font-body"
               >

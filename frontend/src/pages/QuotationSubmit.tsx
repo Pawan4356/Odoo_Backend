@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   PageHeader,
   Table,
@@ -13,35 +13,92 @@ import {
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { RFQS, inr } from "../data/mock";
+import { api } from "../api/client";
 
-const RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
+const DEFAULT_RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
 
 const QuotationSubmit = () => {
-  const { user } = useAuth();
+  const { user, token, vendorProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const role = user!.role;
+  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? DEFAULT_RFQ.id;
+  const [rfq, setRfq] = useState(DEFAULT_RFQ);
 
   // pricing state, one entry per RFQ item
-  const [prices, setPrices] = useState<number[]>(RFQ.items.map(() => 0));
-  const [delivery, setDelivery] = useState<number[]>(RFQ.items.map(() => 7));
+  const [prices, setPrices] = useState<number[]>(DEFAULT_RFQ.items.map(() => 0));
+  const [delivery, setDelivery] = useState<number[]>(DEFAULT_RFQ.items.map(() => 7));
   const [tax, setTax] = useState(18);
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token || !/^\d+$/.test(rfqId)) return;
+    api
+      .rfq(token, rfqId)
+      .then((row) => {
+        setRfq(row);
+        setPrices(row.items.map(() => 0));
+        setDelivery(row.items.map(() => 7));
+      })
+      .catch(() => undefined);
+  }, [rfqId, token]);
 
   const readOnly = role !== "vendor" || submitted;
 
-  const subtotal = RFQ.items.reduce(
+  const subtotal = rfq.items.reduce(
     (s, it, i) => s + it.quantity * (prices[i] || 0),
     0
   );
   const taxAmt = (subtotal * tax) / 100;
   const grand = subtotal + taxAmt;
 
+  const submitQuotation = async () => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    if (!vendorProfile?.id) {
+      setError("Complete your vendor profile before submitting a quotation.");
+      return;
+    }
+    const backendItems = rfq.items
+      .map((it, i) => ({
+        rfq_item_id: Number(it.id),
+        unit_price: Number(prices[i] || 0),
+      }))
+      .filter((it) => Number.isInteger(it.rfq_item_id) && it.rfq_item_id > 0);
+
+    if (!/^\d+$/.test(rfq.id) || backendItems.length !== rfq.items.length) {
+      setError("This RFQ was not loaded from the backend. Open a live RFQ before submitting.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      await api.submitQuotation(token, {
+        rfq_id: Number(rfq.id),
+        vendor_id: Number(vendorProfile.id),
+        delivery_timeline: `${Math.max(...delivery)} days`,
+        notes,
+        items: backendItems,
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit quotation.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="Submit Quotation"
-        subtitle={`RFQ: ${RFQ.title} · Deadline: ${RFQ.deadline}`}
+        subtitle={`RFQ: ${rfq.title} · Deadline: ${rfq.deadline}`}
       />
 
       {role !== "vendor" && (
@@ -66,12 +123,12 @@ const QuotationSubmit = () => {
               RFQ Summary
             </div>
             <div className="px-5 py-4 font-body text-[15px] text-ink-soft">
-              <p className="mb-1 text-ink font-medium">{RFQ.title}</p>
+              <p className="mb-1 text-ink font-medium">{rfq.title}</p>
               <p className="mb-1">
                 Requirement:{" "}
-                {RFQ.items.map((i) => `${i.name} ×${i.quantity}`).join(", ")}
+                {rfq.items.map((i) => `${i.name} ×${i.quantity}`).join(", ")}
               </p>
-              <p>{RFQ.description}</p>
+              <p>{rfq.description}</p>
             </div>
           </div>
 
@@ -92,7 +149,7 @@ const QuotationSubmit = () => {
                   </>
                 }
               >
-                {RFQ.items.map((it, i) => (
+                {rfq.items.map((it, i) => (
                   <tr key={it.name}>
                     <Td>{it.name}</Td>
                     <Td>{it.quantity}</Td>
@@ -174,11 +231,12 @@ const QuotationSubmit = () => {
               ) : (
                 <>
                   <ButtonSecondary onClick={() => alert("Draft saved.")}>Save Draft</ButtonSecondary>
-                  <ButtonPrimary onClick={() => setSubmitted(true)}>Submit Quotation</ButtonPrimary>
+                  <ButtonPrimary onClick={submitQuotation}>{loading ? "Submitting..." : "Submit Quotation"}</ButtonPrimary>
                 </>
               )}
             </div>
           )}
+          {error && <p className="font-body text-[14px] text-[#c4313b] mt-4">{error}</p>}
         </div>
       </div>
     </div>

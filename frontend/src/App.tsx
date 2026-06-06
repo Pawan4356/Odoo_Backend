@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VendorRegistration from "./pages/VendorRegistration";
 import Dashboard from "./pages/Dashboard";
 import Vendors from "./pages/Vendors";
 import RFQList from "./pages/RFQList";
@@ -27,13 +28,22 @@ import Reports from "./pages/Reports";
 const Protected = ({
   children,
   guardPath,
+  shell = true,
 }: {
   children: ReactNode;
   guardPath?: string;
+  shell?: boolean;
 }) => {
-  const { user } = useAuth();
+  const { user, vendorProfileComplete } = useAuth();
   const location = useLocation();
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (
+    user.role === "vendor" &&
+    !vendorProfileComplete &&
+    location.pathname !== "/vendor-registration"
+  ) {
+    return <Navigate to="/vendor-registration" replace />;
+  }
   if (guardPath && !canAccessPath(user.role, guardPath)) {
     return (
       <AppShell>
@@ -47,7 +57,7 @@ const Protected = ({
       </AppShell>
     );
   }
-  return <AppShell>{children}</AppShell>;
+  return shell ? <AppShell>{children}</AppShell> : <>{children}</>;
 };
 
 const App = () => (
@@ -56,6 +66,7 @@ const App = () => (
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/vendor-registration" element={<Protected shell={false}><VendorRegistration /></Protected>} />
 
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/vendors" element={<Protected guardPath="/vendors"><Vendors /></Protected>} />

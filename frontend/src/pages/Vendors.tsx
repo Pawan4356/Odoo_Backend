@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   PageHeader,
   ButtonPrimary,
@@ -10,28 +10,43 @@ import {
   FilterTabs,
   TextInput,
   Field,
-  Select,
   SectionEyebrow,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { VENDORS } from "../data/mock";
 import type { Vendor } from "../types";
+import { api } from "../api/client";
 
 const TABS = ["All", "Active", "Pending", "Removed"];
 
 const Vendors = () => {
-  const { user } = useAuth();
+  const { user, token, vendorProfile } = useAuth();
   const [tab, setTab] = useState("All");
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<Vendor | null>(null);
+  const [vendors, setVendors] = useState<Vendor[]>(VENDORS);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const role = user!.role;
   const canAdd = role === "admin" || role === "officer";
   const canEdit = role === "admin";
 
+  useEffect(() => {
+    if (!token || role === "vendor") return;
+    api
+      .vendors(token)
+      .then((rows) => {
+        setVendors(rows);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load vendors."))
+      .finally(() => setLoading(false));
+  }, [role, token]);
+
   const filtered = useMemo(() => {
-    return VENDORS.filter((v) => (tab === "All" ? true : v.status === tab)).filter(
+    return vendors.filter((v) => (tab === "All" ? true : v.status === tab)).filter(
       (v) => {
         const s = q.trim().toLowerCase();
         if (!s) return true;
@@ -41,11 +56,25 @@ const Vendors = () => {
           .includes(s);
       }
     );
-  }, [tab, q]);
+  }, [tab, q, vendors]);
 
   // Vendor role only sees their own profile — table & controls hidden
   if (role === "vendor") {
-    const self = VENDORS.find((v) => v.id === "v-1")!;
+    const self: Vendor = vendorProfile
+      ? {
+          id: vendorProfile.id,
+          name: vendorProfile.name,
+          category: vendorProfile.category || "General",
+          gst: vendorProfile.gst,
+          contact: vendorProfile.contact,
+          email: user?.email ?? "",
+          phone: vendorProfile.phone,
+          address: "",
+          country: "India",
+          status: vendorProfile.status,
+          rating: 0,
+        }
+      : VENDORS.find((v) => v.id === "v-1")!;
     return (
       <div>
         <SectionEyebrow>My Vendor Profile</SectionEyebrow>
@@ -71,6 +100,13 @@ const Vendors = () => {
       </div>
 
       <FilterTabs tabs={TABS} active={tab} onChange={setTab} />
+
+      {loading && (
+        <p className="font-body text-[14px] text-ink-faint mb-3">Loading vendors...</p>
+      )}
+      {loadError && (
+        <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
+      )}
 
       <Table
         head={
@@ -162,39 +198,48 @@ const VendorDetail = ({ vendor }: { vendor: Vendor }) => (
   </div>
 );
 
-const AddVendorModal = ({ onClose }: { onClose: () => void }) => (
-  <Modal title="Add Vendor" onClose={onClose}>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-      <Field label="Vendor Name"><TextInput placeholder="Company name" /></Field>
-      <Field label="Category">
-        <Select>
-          <option>Furniture</option>
-          <option>IT Hardware</option>
-          <option>Office Supplies</option>
-          <option>Logistics</option>
-          <option>Services</option>
-        </Select>
-      </Field>
-      <Field label="GST Number"><TextInput placeholder="GSTIN" /></Field>
-      <Field label="Contact Person"><TextInput /></Field>
-      <Field label="Email"><TextInput type="email" /></Field>
-      <Field label="Phone Number"><TextInput /></Field>
-      <Field label="Country"><TextInput defaultValue="India" /></Field>
-      <Field label="Vendor Status">
-        <Select>
-          <option>Pending</option>
-          <option>Active</option>
-          <option>Removed</option>
-        </Select>
-      </Field>
-    </div>
-    <Field label="Address"><TextInput placeholder="Business address" /></Field>
-    <div className="flex justify-end gap-3 mt-3">
-      <ButtonSecondary onClick={onClose}>Cancel</ButtonSecondary>
-      <ButtonPrimary onClick={onClose}>Save Vendor</ButtonPrimary>
-    </div>
-  </Modal>
-);
+const AddVendorModal = ({ onClose }: { onClose: () => void }) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.register({ name, email, password, role: "vendor" });
+      setMessage("Vendor account created. The vendor can sign in and complete company details.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create vendor account.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal title="Add Vendor" onClose={onClose}>
+      <form onSubmit={submit}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          <Field label="Vendor Name"><TextInput required value={name} onChange={(e) => setName(e.target.value)} placeholder="Company or contact name" /></Field>
+          <Field label="Email"><TextInput required value={email} onChange={(e) => setEmail(e.target.value)} type="email" /></Field>
+          <Field label="Temporary Password"><TextInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} type="password" /></Field>
+          <Field label="Role"><TextInput value="Vendor" disabled /></Field>
+        </div>
+        {error && <p className="font-body text-[14px] text-[#c4313b] mb-3">{error}</p>}
+        {message && <p className="font-body text-[15px] text-ink-soft mb-3">{message}</p>}
+        <div className="flex justify-end gap-3 mt-3">
+          <ButtonSecondary onClick={onClose}>Cancel</ButtonSecondary>
+          <ButtonPrimary type="submit">{loading ? "Saving..." : "Create Vendor Login"}</ButtonPrimary>
+        </div>
+      </form>
+    </Modal>
+  );
+};
 
 /* shared square modal — hard border, flat, no soft shadow */
 export const Modal = ({

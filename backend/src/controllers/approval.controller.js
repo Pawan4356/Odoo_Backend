@@ -1,6 +1,43 @@
 const db = require("../lib/db");
 const { handleDbError } = require("../lib/db-errors");
 
+exports.getApprovals = async (req, res) => {
+  try {
+    const approvals = await db.query(
+      `SELECT q.id AS quotation_id,
+        q.status AS quotation_status,
+        q.delivery_timeline,
+        q.notes,
+        q.created_at AS quotation_created_at,
+        r.id AS rfq_id,
+        r.title AS rfq_title,
+        v.id AS vendor_id,
+        v.company_name AS vendor_name,
+        a.id AS approval_id,
+        a.status AS approval_status,
+        a.remarks,
+        a.created_at AS approval_created_at,
+        manager.name AS manager_name,
+        COALESCE(total.total_amount, 0) AS total_amount
+       FROM quotations q
+       JOIN rfqs r ON r.id = q.rfq_id
+       JOIN vendors v ON v.id = q.vendor_id
+       LEFT JOIN approvals a ON a.target_type = 'QUOTATION' AND a.target_id = q.id
+       LEFT JOIN users manager ON manager.id = a.manager_id
+       LEFT JOIN LATERAL (
+         SELECT SUM(qi.unit_price * ri.quantity) AS total_amount
+         FROM quotation_items qi
+         JOIN rfq_items ri ON ri.id = qi.rfq_item_id
+         WHERE qi.quotation_id = q.id
+       ) total ON true
+       ORDER BY COALESCE(a.created_at, q.created_at) DESC`,
+    );
+    res.json(approvals.rows);
+  } catch (err) {
+    handleDbError(err, res);
+  }
+};
+
 exports.approveQuotation = async (req, res) => {
   const { status, remarks } = req.body;
   const manager_id = req.user.id;
@@ -49,6 +86,16 @@ exports.approveQuotation = async (req, res) => {
     const approval = await db.query(
       "INSERT INTO approvals (target_type, target_id, manager_id, status, remarks) VALUES ($1, $2, $3, $4, $5) RETURNING *",
       ["QUOTATION", target_id, manager_id, status, remarks],
+    );
+
+    await db.query(
+      "INSERT INTO activity_logs (user_id, action, target_type, target_id) VALUES ($1, $2, $3, $4)",
+      [
+        manager_id,
+        `Quotation ${target_id} ${status.toLowerCase()}`,
+        "APPROVAL",
+        approval.rows[0].id,
+      ],
     );
 
     if (status === "Approved") {

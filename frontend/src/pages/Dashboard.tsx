@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   StatCard,
@@ -21,6 +22,7 @@ import {
   inr,
 } from "../data/mock";
 import type { Role } from "../types";
+import { api } from "../api/client";
 
 /* Analytics card visibility per role (structure.md Screen 03) */
 const cardVisible = (role: Role, card: string) => {
@@ -34,22 +36,35 @@ const cardVisible = (role: Role, card: string) => {
 };
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, token, vendorProfileComplete } = useAuth();
   const navigate = useNavigate();
-  if (!user) return null;
-  const role = user.role;
+  const [rfqs, setRfqs] = useState(RFQS);
+  const [vendors, setVendors] = useState(VENDORS);
+  const [purchaseOrders, setPurchaseOrders] = useState(PURCHASE_ORDERS);
+  const role = user?.role ?? "vendor";
 
-  const activeRfqs = RFQS.filter((r) => r.status === "Active").length;
+  useEffect(() => {
+    if (!token) return;
+    api.purchaseOrders(token).then((rows) => rows.length && setPurchaseOrders(rows)).catch(() => undefined);
+    if (role !== "vendor") {
+      api.rfqs(token).then((rows) => setRfqs(rows)).catch(() => undefined);
+      api.vendors(token).then((rows) => setVendors(rows)).catch(() => undefined);
+    }
+  }, [role, token]);
+
+  if (!user) return null;
+
+  const activeRfqs = rfqs.filter((r) => r.status === "Active").length;
   const pendingApprovals = APPROVALS.filter((a) => a.status === "Pending Approval").length;
-  const poValue = PURCHASE_ORDERS.reduce(
+  const poValue = purchaseOrders.reduce(
     (s, p) => s + p.lines.reduce((x, l) => x + l.quantity * l.unitPrice, 0),
     0
   );
-  const activeVendors = VENDORS.filter((v) => v.status === "Active").length;
+  const activeVendors = vendors.filter((v) => v.status === "Active").length;
 
   // Recent PO scoping by role
-  const visiblePOs = PURCHASE_ORDERS.filter((p) =>
-    role === "vendor" ? p.vendorId === "v-1" : true
+  const visiblePOs = purchaseOrders.filter((p) =>
+    role === "vendor" ? p.vendorId === "v-1" || p.vendorId === "" : true
   );
 
   const showChart = role === "admin" || role === "manager";
@@ -139,6 +154,9 @@ const Dashboard = () => {
           )}
           {role === "vendor" && (
             <ButtonPrimary onClick={() => navigate("/rfqs")}>View Assigned RFQs</ButtonPrimary>
+          )}
+          {role === "vendor" && !vendorProfileComplete && (
+            <ButtonSecondary onClick={() => navigate("/vendor-registration")}>Complete Vendor Profile</ButtonSecondary>
           )}
         </div>
       </div>

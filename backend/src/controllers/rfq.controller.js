@@ -49,6 +49,11 @@ exports.createRFQ = async (req, res) => {
       }
     }
 
+    await db.query(
+      "INSERT INTO activity_logs (user_id, action, target_type, target_id) VALUES ($1, $2, $3, $4)",
+      [created_by, `RFQ ${title} created`, "RFQ", rfq_id],
+    );
+
     await db.query("COMMIT");
     res.status(201).json(newRFQ.rows[0]);
   } catch (err) {
@@ -59,7 +64,60 @@ exports.createRFQ = async (req, res) => {
 
 exports.getRFQs = async (req, res) => {
   try {
-    const rfqs = await db.query("SELECT * FROM rfqs ORDER BY created_at DESC");
+    const params = [];
+    let where = "";
+    if (req.user.role === "Vendor") {
+      params.push(req.user.id);
+      where = `WHERE EXISTS (
+        SELECT 1
+        FROM rfq_vendors rv
+        JOIN vendors vv ON vv.id = rv.vendor_id
+        WHERE rv.rfq_id = r.id AND vv.user_id = $1
+      )`;
+    }
+
+    const rfqs = await db.query(
+      `SELECT r.*,
+        COALESCE(items.items, '[]'::json) AS items,
+        COALESCE(vendors.vendors, '[]'::json) AS vendors
+       FROM rfqs r
+       LEFT JOIN LATERAL (
+         SELECT json_agg(
+           json_build_object(
+             'id', ri.id,
+             'product_name', ri.product_name,
+             'quantity', ri.quantity,
+             'description', ri.description
+           )
+           ORDER BY ri.id
+         ) AS items
+         FROM rfq_items ri
+         WHERE ri.rfq_id = r.id
+       ) items ON true
+       LEFT JOIN LATERAL (
+         SELECT json_agg(
+           json_build_object(
+             'id', v.id,
+             'user_id', v.user_id,
+             'company_name', v.company_name,
+             'contact_person', v.contact_person,
+             'phone', v.phone,
+             'gst_details', v.gst_details,
+             'category', v.category,
+             'status', v.status,
+             'email', u.email
+           )
+           ORDER BY v.company_name
+         ) AS vendors
+         FROM rfq_vendors rv
+         JOIN vendors v ON v.id = rv.vendor_id
+         JOIN users u ON u.id = v.user_id
+         WHERE rv.rfq_id = r.id
+       ) vendors ON true
+       ${where}
+       ORDER BY r.created_at DESC`,
+      params,
+    );
     res.json(rfqs.rows);
   } catch (err) {
     handleDbError(err, res);
@@ -79,8 +137,9 @@ exports.getRFQById = async (req, res) => {
       req.params.id,
     ]);
     const vendors = await db.query(
-      `SELECT v.* FROM vendors v
+      `SELECT v.*, u.email FROM vendors v
        JOIN rfq_vendors rv ON v.id = rv.vendor_id
+       JOIN users u ON u.id = v.user_id
        WHERE rv.rfq_id = $1`,
       [req.params.id],
     );

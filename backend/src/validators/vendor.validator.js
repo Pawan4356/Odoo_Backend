@@ -34,4 +34,31 @@ const registerVendorValidators = [
 
 const getVendorByIdValidators = [idParam()];
 
-module.exports = { registerVendorValidators, getVendorByIdValidators };
+const createVendorByStaffValidators = [
+  body('name')
+    .optional({ values: 'null' })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('Name must be at most 255 characters'),
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('A valid email is required')
+    .normalizeEmail()
+    .isLength({ max: 255 })
+    .withMessage('Email must be at most 255 characters'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be between 8 and 128 characters'),
+  ...registerVendorValidators,
+];
+
+module.exports = {
+  createVendorByStaffValidators,
+  registerVendorValidators,
+  getVendorByIdValidators,
+};

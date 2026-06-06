@@ -20,7 +20,7 @@ router.post(
   validate,
   createRFQ,
 );
-router.get("/", authorize("Procurement Officer", "Admin", "Manager"), getRFQs);
+router.get("/", authorize("Procurement Officer", "Admin", "Manager", "Vendor"), getRFQs);
 router.get("/:id", getRFQByIdValidators, validate, getRFQById);
 
 module.exports = router;

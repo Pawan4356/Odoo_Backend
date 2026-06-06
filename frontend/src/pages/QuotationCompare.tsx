@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader, ButtonPrimary } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -10,34 +10,55 @@ import {
   inr,
   quoteSubtotal,
 } from "../data/mock";
+import { api } from "../api/client";
+import type { Quotation, RFQ } from "../types";
 
-const RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
+const DEFAULT_RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
 
 const QuotationCompare = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const role = user!.role;
+  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? DEFAULT_RFQ.id;
+  const [rfq, setRfq] = useState<RFQ>(DEFAULT_RFQ);
+  const [quotes, setQuotes] = useState<(Quotation & { vendorName?: string; totalAmount?: number })[]>(
+    QUOTATIONS.filter((q) => q.rfqId === DEFAULT_RFQ.id),
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
 
-  const quotes = QUOTATIONS.filter((q) => q.rfqId === RFQ.id);
+  useEffect(() => {
+    if (!token || !/^\d+$/.test(rfqId)) return;
+    Promise.all([api.rfq(token, rfqId), api.quotationsByRFQ(token, rfqId)])
+      .then(([nextRfq, nextQuotes]) => {
+        setRfq(nextRfq);
+        setQuotes(nextQuotes);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load quotations."));
+  }, [rfqId, token]);
 
   // weighted recommendation: lowest total + fastest delivery + highest rating
   const scored = useMemo(() => {
+    if (quotes.length === 0) return { withScore: [], bestId: "" };
     const rows = quotes.map((q) => {
-      const total = quoteSubtotal(q) * (1 + q.taxPct / 100);
+      const total = q.totalAmount ?? quoteSubtotal(q) * (1 + q.taxPct / 100);
       const avgDelivery =
-        q.lines.reduce((s, l) => s + l.deliveryDays, 0) / q.lines.length;
+        q.lines.length > 0
+          ? q.lines.reduce((s, l) => s + l.deliveryDays, 0) / q.lines.length
+          : 0;
       const rating = VENDORS.find((v) => v.id === q.vendorId)?.rating ?? 0;
       return { q, total, avgDelivery, rating };
     });
-    const minTotal = Math.min(...rows.map((r) => r.total));
-    const minDelivery = Math.min(...rows.map((r) => r.avgDelivery));
+    const minTotal = Math.min(...rows.map((r) => r.total || 1));
+    const minDelivery = Math.min(...rows.map((r) => r.avgDelivery || 1));
     const maxRating = Math.max(...rows.map((r) => r.rating));
     const withScore = rows.map((r) => ({
       ...r,
       score:
-        (minTotal / r.total) * 0.5 +
-        (minDelivery / r.avgDelivery) * 0.3 +
+        (minTotal / (r.total || 1)) * 0.5 +
+        (minDelivery / (r.avgDelivery || 1)) * 0.3 +
         (r.rating / (maxRating || 1)) * 0.2,
     }));
     const best = withScore.reduce((a, b) => (b.score > a.score ? b : a));
@@ -52,7 +73,7 @@ const QuotationCompare = () => {
         <div className="rounded-[18px] border border-hairline bg-canvas px-7 py-8 font-body text-[17px] text-ink-soft">
           Competitor quotations and pricing are never shown to vendor accounts.
           <p className="mt-3">
-            Your quotation for <strong className="text-ink font-medium">{RFQ.title}</strong> is{" "}
+            Your quotation for <strong className="text-ink font-medium">{rfq.title}</strong> is{" "}
             <strong className="text-ink font-medium">Submitted</strong> and awaiting procurement review.
           </p>
         </div>
@@ -86,7 +107,7 @@ const QuotationCompare = () => {
 
   const select = (id: string) => {
     setSelectedId(id);
-    setTimeout(() => navigate("/approvals"), 900);
+    setTimeout(() => navigate("/approvals", { state: { quotationId: id, rfqId: rfq.id } }), 900);
   };
 
   const canSelect = role === "officer";
@@ -95,8 +116,12 @@ const QuotationCompare = () => {
     <div>
       <PageHeader
         title="Quotation Comparison"
-        subtitle={`RFQ: ${RFQ.title} · ${quotes.length} quotations received`}
+        subtitle={`RFQ: ${rfq.title} · ${quotes.length} quotations received`}
       />
+
+      {loadError && (
+        <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
+      )}
 
       <div className="rounded-[18px] border border-hairline bg-canvas overflow-x-auto">
         <table className="w-full text-left">
@@ -110,7 +135,7 @@ const QuotationCompare = () => {
                     q.id === scored.bestId ? "bg-primary/[0.06] text-primary" : "text-ink"
                   }`}
                 >
-                  {vendorName(q.vendorId)}
+                  {q.vendorName ?? vendorName(q.vendorId)}
                   {q.id === scored.bestId && (
                     <span className="block font-body text-[12px] font-normal text-primary mt-0.5">★ recommended</span>
                   )}
@@ -163,7 +188,7 @@ const QuotationCompare = () => {
 
       {selectedId && (
         <div className="rounded-[14px] border border-hairline bg-parchment px-5 py-4 mt-5 font-body text-[15px] text-ink-soft">
-          {vendorName(quotes.find((q) => q.id === selectedId)!.vendorId)} selected —
+          {quotes.find((q) => q.id === selectedId)?.vendorName ?? vendorName(quotes.find((q) => q.id === selectedId)!.vendorId)} selected —
           forwarding to manager for approval…
         </div>
       )}

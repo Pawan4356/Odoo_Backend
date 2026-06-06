@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   PageHeader,
   StepIndicator,
@@ -10,16 +11,23 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { APPROVALS, RFQS, vendorName, inr } from "../data/mock";
 import type { ApprovalStatus } from "../types";
+import { api } from "../api/client";
 
 const STEPS = ["Submitted", "Review", "Approval", "Ordered"];
 
 const Approvals = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const location = useLocation();
   const role = user!.role;
+  const quotationId =
+    (location.state as { quotationId?: string } | null)?.quotationId ??
+    pendingQuotationIdFallback();
 
   const pending = APPROVALS.find((a) => a.status === "Pending Approval") ?? APPROVALS[0];
   const [remarks, setRemarks] = useState("");
   const [decision, setDecision] = useState<ApprovalStatus>(pending.status);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const rfq = RFQS.find((r) => r.id === pending.rfqId);
   const canDecide = role === "manager" && decision === "Pending Approval";
@@ -27,10 +35,22 @@ const Approvals = () => {
   const currentStep =
     decision === "Approved" ? 4 : decision === "Rejected" ? 3 : 3;
 
-  const act = (next: ApprovalStatus) => {
+  const act = async (next: ApprovalStatus) => {
     if (next === "Rejected" && !remarks.trim()) {
-      alert("Remarks are mandatory before rejection.");
+      setError("Remarks are mandatory before rejection.");
       return;
+    }
+    setError("");
+    if (token && /^\d+$/.test(quotationId) && (next === "Approved" || next === "Rejected")) {
+      setSaving(true);
+      try {
+        await api.approveQuotation(token, quotationId, next, remarks);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to record approval.");
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
     }
     setDecision(next);
   };
@@ -114,7 +134,7 @@ const Approvals = () => {
               {role === "manager" ? (
                 decision === "Pending Approval" ? (
                   <div className="flex gap-3">
-                    <ButtonPrimary onClick={() => act("Approved")}>Approve</ButtonPrimary>
+                    <ButtonPrimary onClick={() => act("Approved")}>{saving ? "Saving..." : "Approve"}</ButtonPrimary>
                     <ButtonSecondary onClick={() => act("Rejected")}>Reject</ButtonSecondary>
                   </div>
                 ) : (
@@ -132,6 +152,7 @@ const Approvals = () => {
                     : "Monitoring view — full approval audit history is available to Admin."}
                 </div>
               )}
+              {error && <p className="font-body text-[14px] text-[#c4313b]">{error}</p>}
             </div>
           </div>
         </>
@@ -139,5 +160,8 @@ const Approvals = () => {
     </div>
   );
 };
+
+const pendingQuotationIdFallback = () =>
+  APPROVALS.find((a) => a.status === "Pending Approval")?.quotationId ?? APPROVALS[0]?.quotationId ?? "";
 
 export default Approvals;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PageHeader,
   Table,
@@ -11,25 +11,48 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { PURCHASE_ORDERS, VENDORS, inr } from "../data/mock";
 import type { PaymentStatus } from "../types";
+import { api } from "../api/client";
 
 const Invoices = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const role = user!.role;
+  const [orders, setOrders] = useState(PURCHASE_ORDERS);
+  const [loadError, setLoadError] = useState("");
 
   // vendor sees only own PO
   const list = role === "vendor"
-    ? PURCHASE_ORDERS.filter((p) => p.vendorId === "v-1")
-    : PURCHASE_ORDERS;
+    ? orders.filter((p) => p.vendorId === "v-1" || p.vendorId === "")
+    : orders;
 
   const [activeId, setActiveId] = useState(list[0]?.id ?? "");
   const [payment, setPayment] = useState<PaymentStatus>(
     list[0]?.payment ?? "Pending Payment"
   );
 
+  useEffect(() => {
+    if (!token) return;
+    api
+      .purchaseOrders(token)
+      .then((rows) => {
+        if (rows.length > 0) {
+          setOrders(rows);
+          setActiveId(rows[0].id);
+          setPayment(rows[0].payment);
+        }
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load purchase orders."));
+  }, [token]);
+
   const po = list.find((p) => p.id === activeId) ?? list[0];
   if (!po) return <div className="font-body">No purchase orders.</div>;
 
-  const vendor = VENDORS.find((v) => v.id === po.vendorId)!;
+  const vendor = VENDORS.find((v) => v.id === po.vendorId) ?? {
+    name: "Vendor",
+    address: "Address not available",
+    country: "India",
+    gst: "",
+    email: "",
+  };
   const subtotal = po.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
   const taxAmt = (subtotal * po.taxPct) / 100;
   const grand = subtotal + taxAmt - po.discount;
@@ -51,6 +74,10 @@ const Invoices = () => {
           </div>
         }
       />
+
+      {loadError && (
+        <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
+      )}
 
       {/* PO selector when more than one */}
       {list.length > 1 && (

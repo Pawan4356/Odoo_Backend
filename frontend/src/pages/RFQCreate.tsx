@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PageHeader,
@@ -15,12 +15,13 @@ import {
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { VENDORS } from "../data/mock";
-import type { RFQItem } from "../types";
+import type { RFQItem, Vendor } from "../types";
+import { api } from "../api/client";
 
 const STEPS = ["RFQ Information", "Vendor & Item Details", "Review & Publish"];
 
 const RFQCreate = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   const role = user!.role;
 
@@ -34,6 +35,18 @@ const RFQCreate = () => {
   ]);
   const [selected, setSelected] = useState<string[]>([]);
   const [picker, setPicker] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>(VENDORS);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!token || role !== "officer") return;
+    api
+      .vendors(token)
+      .then((rows) => setVendors(rows))
+      .catch(() => setVendors(VENDORS));
+  }, [role, token]);
 
   // Only Procurement Officer can create
   if (role !== "officer") {
@@ -59,13 +72,41 @@ const RFQCreate = () => {
   const toggleVendor = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  const finish = (publish: boolean) => {
-    alert(
-      publish
-        ? "RFQ published — assigned vendors notified. Status: Active."
-        : "RFQ saved as draft. Vendors not notified."
-    );
-    navigate("/rfqs");
+  const finish = async (publish: boolean) => {
+    setError("");
+    setMessage("");
+    if (!publish) {
+      setMessage("Drafts are not supported by the current backend yet.");
+      return;
+    }
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    const validItems = items.filter((it) => it.name.trim() && it.quantity > 0);
+    if (!title.trim() || !deadline || validItems.length === 0) {
+      setError("Title, future deadline and at least one item are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.createRFQ(token, {
+        title: title.trim(),
+        description: [category, description].filter(Boolean).join(" — "),
+        deadline,
+        items: validItems.map((it) => ({
+          product_name: it.name.trim(),
+          quantity: Number(it.quantity),
+          description: it.unit,
+        })),
+        vendor_ids: selected.map(Number).filter((id) => Number.isInteger(id) && id > 0),
+      });
+      navigate("/rfqs");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to publish RFQ.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -181,7 +222,7 @@ const RFQCreate = () => {
                   <span className="font-body text-[15px] text-ink-faint">No vendors selected.</span>
                 )}
                 {selected.map((id) => {
-                  const v = VENDORS.find((x) => x.id === id)!;
+                  const v = vendors.find((x) => x.id === id)!;
                   return (
                     <span
                       key={id}
@@ -231,12 +272,16 @@ const RFQCreate = () => {
         </div>
         <div className="flex gap-3">
           <ButtonSecondary onClick={() => finish(false)}>Save as Draft</ButtonSecondary>
-          <ButtonPrimary onClick={() => finish(true)}>Save &amp; Publish</ButtonPrimary>
+          <ButtonPrimary onClick={() => finish(true)}>{saving ? "Publishing..." : "Save & Publish"}</ButtonPrimary>
         </div>
       </div>
 
+      {error && <p className="font-body text-[14px] text-[#c4313b] mt-4">{error}</p>}
+      {message && <p className="font-body text-[14px] text-ink-faint mt-4">{message}</p>}
+
       {picker && (
         <VendorPicker
+          vendors={vendors}
           selected={selected}
           onToggle={toggleVendor}
           onClose={() => setPicker(false)}
@@ -247,16 +292,18 @@ const RFQCreate = () => {
 };
 
 const VendorPicker = ({
+  vendors,
   selected,
   onToggle,
   onClose,
 }: {
+  vendors: Vendor[];
   selected: string[];
   onToggle: (id: string) => void;
   onClose: () => void;
 }) => {
   const [q, setQ] = useState("");
-  const rows = VENDORS.filter((v) => v.status === "Active").filter((v) =>
+  const rows = vendors.filter((v) => v.status === "Active").filter((v) =>
     (v.name + v.category).toLowerCase().includes(q.toLowerCase())
   );
   return (

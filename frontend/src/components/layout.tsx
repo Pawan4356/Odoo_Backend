@@ -77,9 +77,9 @@ const Sidebar = () => {
 const MobileNav = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
   if (!user) return null;
   const items = navForRole(user.role);
-  const [open, setOpen] = useState(false);
 
   return (
     <div className="md:hidden bg-black text-white">

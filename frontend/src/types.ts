@@ -11,6 +11,23 @@ export interface User {
   country: string;
 }
 
+export interface AuthSession {
+  token: string;
+  user: User;
+}
+
+export interface VendorProfile {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  gst: string;
+  contact: string;
+  phone: string;
+  email?: string;
+  status: VendorStatus;
+}
+
 export type VendorStatus = "Active" | "Pending" | "Removed";
 
 export interface Vendor {
@@ -30,6 +47,7 @@ export interface Vendor {
 export type RFQStatus = "Draft" | "Active" | "Under Review" | "Closed";
 
 export interface RFQItem {
+  id?: string;
   name: string;
   quantity: number;
   unit: string;
