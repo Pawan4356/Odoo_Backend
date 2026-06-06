@@ -9,7 +9,7 @@ import type {
   Role,
 } from "../types";
 
-// Demo accounts — one per role. Login maps username → role (front-end only).
+// Demo accounts keyed by role slug AND by email for sign-in lookup.
 export const DEMO_USERS: Record<string, User> = {
   admin: {
     id: "u-admin",
@@ -41,9 +41,14 @@ export const DEMO_USERS: Record<string, User> = {
   },
 };
 
+// Lookup by email for the sign-in form.
+export const DEMO_USERS_BY_EMAIL: Record<string, User> = Object.fromEntries(
+  Object.values(DEMO_USERS).map((u) => [u.email, u])
+);
+
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
-  manager: "Manager / Approver",
+  manager: "Manager",
   officer: "Procurement Officer",
   vendor: "Vendor",
 };
