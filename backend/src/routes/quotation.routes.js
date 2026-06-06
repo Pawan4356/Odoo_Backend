@@ -10,7 +10,7 @@ const {
 
 const router = express.Router();
 
-router.post('/', authorize('Vendor', 'Admin'), submitQuotationValidators, validate, submitQuotation);
+router.post('/', authorize('Vendor'), submitQuotationValidators, validate, submitQuotation);
 router.get('/rfq/:rfq_id', getQuotationsByRFQValidators, validate, getQuotationsByRFQ);
 router.get('/:id', getQuotationByIdValidators, validate, getQuotationById);
 
