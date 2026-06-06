@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* ============================================================
+   VendorBridge — skinned in Apple's web design system
+   (see frontend/apple-design.md). Photography-first calm:
+   near-invisible UI, a single blue accent, SF Pro / Inter,
+   pill CTAs, hairline cards, exactly one product shadow.
+   ============================================================ */
+
+@theme {
+  /* Brand & accent — the single interactive color */
+  --color-primary: #0066cc;          /* Action Blue — every CTA + link  */
+  --color-primary-focus: #0071e3;    /* keyboard focus ring             */
+  --color-primary-on-dark: #2997ff;  /* Sky Link Blue — links on dark   */
+  --color-on-primary: #ffffff;
+
+  /* Surfaces */
+  --color-canvas: #ffffff;           /* dominant white canvas           */
+  --color-parchment: #f5f5f7;        /* signature off-white             */
+  --color-pearl: #fafafc;            /* ghost-button fill               */
+  --color-tile-1: #272729;           /* near-black product tile         */
+  --color-tile-2: #2a2a2c;
+  --color-tile-3: #252527;
+  --color-black: #000000;            /* true void — global nav bar      */
+
+  /* Text */
+  --color-ink: #1d1d1f;              /* near-black ink — headlines+body */
+  --color-ink-soft: #6e6e73;         /* secondary copy on light         */
+  --color-ink-faint: #86868b;        /* captions / fine print           */
+  --color-on-dark: #ffffff;
+  --color-muted-on-dark: #cccccc;
+
+  /* Hairlines */
+  --color-hairline: #d2d2d7;         /* 1px card + divider tone         */
+  --color-hairline-soft: #e8e8ed;
+
+  /* Type stacks — system-ui resolves to real SF Pro on Apple OSes,
+     Inter is the closest open-source substitute elsewhere. */
+  --font-display: system-ui, -apple-system, "SF Pro Display", Inter, sans-serif;
+  --font-ui: system-ui, -apple-system, "SF Pro Text", Inter, sans-serif;
+  --font-body: system-ui, -apple-system, "SF Pro Text", Inter, sans-serif;
+
+  /* Radius scale */
+  --radius-sm: 8px;     /* compact utility buttons        */
+  --radius-md: 11px;    /* pearl capsules                 */
+  --radius-lg: 18px;    /* utility cards, panels          */
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-parchment);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.47;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  h1, h2, h3, h4 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  input, select, textarea, button {
+    font-family: inherit;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  ::selection {
+    background: rgba(0, 102, 204, 0.16);
+  }
+}
+
+/* The single drop-shadow in the system — reserved for product
+   renders resting on a surface. Never on cards, buttons, or text. */
+@utility product-shadow {
+  box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0;
+}
+
+/* Frosted sticky bar — backdrop blur over content (functional). */
+@utility frosted {
+  background: rgba(245, 245, 247, 0.8);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* System-wide press micro-interaction. */
+@utility press {
+  transition: transform 0.12s ease;
+}
+@utility press-active {
+  transform: scale(0.95);
+}
