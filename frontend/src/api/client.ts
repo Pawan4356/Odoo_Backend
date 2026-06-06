@@ -12,7 +12,8 @@ import type {
   VendorStatus,
 } from "../types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api";
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api";
 
 type BackendRole = "Admin" | "Manager" | "Procurement Officer" | "Vendor";
 
@@ -260,13 +261,17 @@ export const mapRFQ = (r: BackendRFQ): RFQ => ({
   createdBy: String(r.created_by ?? ""),
 });
 
-const mapQuotationStatus = (status?: BackendQuotation["status"]): Quotation["status"] => {
+const mapQuotationStatus = (
+  status?: BackendQuotation["status"],
+): Quotation["status"] => {
   if (status === "Approved") return "Selected";
   if (status === "Rejected") return "Rejected";
   return "Pending Approval";
 };
 
-export const mapQuotation = (q: BackendQuotation): Quotation & { vendorName?: string; totalAmount?: number } => ({
+export const mapQuotation = (
+  q: BackendQuotation,
+): Quotation & { vendorName?: string; totalAmount?: number } => ({
   id: String(q.id),
   rfqId: String(q.rfq_id),
   vendorId: String(q.vendor_id),
@@ -288,10 +293,14 @@ export const mapQuotation = (q: BackendQuotation): Quotation & { vendorName?: st
 
 export const mapPO = (p: BackendPO): RichPO => ({
   id: p.po_number || String(p.id),
-  rfqId: String(p.rfq_id ?? ""),
-  vendorId: String(p.vendor_id ?? ""),
-  poDate: String(p.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
-  invoiceDate: String(p.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+  rfqId: "",
+  vendorId: "",
+  poDate:
+    String(p.created_at || "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10),
+  invoiceDate:
+    String(p.created_at || "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10),
   dueDate: "",
   lines:
     p.items && Array.isArray(p.items) && p.items.length > 0
@@ -353,14 +362,23 @@ async function request<T>(
 
 export const api = {
   login: async (email: string, password: string): Promise<AuthSession> => {
-    const data = await request<{ token: string; user: BackendUser }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
+    const data = await request<{ token: string; user: BackendUser }>(
+      "/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      },
+    );
     return { token: data.token, user: mapUser(data.user) };
   },
 
-  register: (payload: { name: string; email: string; password: string; role: Role }) =>
+  register: (payload: {
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+    otp: string;
+  }) =>
     request<BackendUser>("/auth/register", {
       method: "POST",
       body: JSON.stringify({
@@ -368,6 +386,7 @@ export const api = {
         email: payload.email,
         password: payload.password,
         role: roleToBackend(payload.role),
+        otp: payload.otp, // ← only addition
       }),
     }),
 
@@ -448,26 +467,44 @@ export const api = {
     return mapRFQ(rfq);
   },
 
-  createRFQ: (token: string, payload: {
-    title: string;
-    description?: string;
-    deadline: string;
-    items: { product_name: string; quantity: number; description?: string }[];
-    vendor_ids: number[];
-  }) =>
-    request<BackendRFQ>("/rfqs", { method: "POST", body: JSON.stringify(payload) }, token),
+  createRFQ: (
+    token: string,
+    payload: {
+      title: string;
+      description?: string;
+      deadline: string;
+      items: { product_name: string; quantity: number; description?: string }[];
+      vendor_ids: number[];
+    },
+  ) =>
+    request<BackendRFQ>(
+      "/rfqs",
+      { method: "POST", body: JSON.stringify(payload) },
+      token,
+    ),
 
-  submitQuotation: (token: string, payload: {
-    rfq_id: number;
-    vendor_id: number;
-    delivery_timeline?: string;
-    notes?: string;
-    items: { rfq_item_id: number; unit_price: number }[];
-  }) =>
-    request<BackendQuotation>("/quotations", { method: "POST", body: JSON.stringify(payload) }, token),
+  submitQuotation: (
+    token: string,
+    payload: {
+      rfq_id: number;
+      vendor_id: number;
+      delivery_timeline?: string;
+      notes?: string;
+      items: { rfq_item_id: number; unit_price: number }[];
+    },
+  ) =>
+    request<BackendQuotation>(
+      "/quotations",
+      { method: "POST", body: JSON.stringify(payload) },
+      token,
+    ),
 
   quotationsByRFQ: async (token: string, rfqId: string) => {
-    const quotations = await request<BackendQuotation[]>(`/quotations/rfq/${rfqId}`, {}, token);
+    const quotations = await request<BackendQuotation[]>(
+      `/quotations/rfq/${rfqId}`,
+      {},
+      token,
+    );
     return quotations.map(mapQuotation);
   },
 
@@ -514,4 +551,9 @@ export const api = {
   
   resetPassword: (token: string, userId: number | string, newPassword: string) => 
     request<any>(`/users/${userId}/reset-password`, { method: "POST", body: JSON.stringify({ newPassword }) }, token),
+  sendOtp: (email: string) =>
+    request<{ message: string }>("/auth/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
 };
