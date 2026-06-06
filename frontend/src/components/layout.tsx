@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { navForRole } from "../auth/nav";
 import { ROLE_LABEL } from "../data/mock";
 import fullLogo from "../assets/full-logo.png";
+import { AuthBackground } from "./auth-background";
 
 export const PageFrame = ({ children }: { children: ReactNode }) => (
   <div className="min-h-full bg-parchment">{children}</div>
@@ -145,7 +146,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => (
 
 /* ---- Bare shell for pre-auth screens (login / register) ---- */
 export const AuthShell = ({ children }: { children: ReactNode }) => (
-  <PageFrame>
-    <main className="mx-auto max-w-[1440px] px-5 py-12 sm:py-20">{children}</main>
-  </PageFrame>
+  <div className="min-h-screen relative overflow-hidden bg-parchment flex items-center justify-center px-5 py-12">
+    <AuthBackground />
+    <main className="relative z-10 w-full">{children}</main>
+  </div>
 );

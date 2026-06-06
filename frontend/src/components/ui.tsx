@@ -108,26 +108,35 @@ export const Field = ({
   label,
   children,
   hint,
+  dark,
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
+  dark?: boolean;
 }) => (
   <label className="block mb-5">
-    <span className="block font-ui text-[14px] font-medium text-ink-soft mb-2">
+    <span className={`block font-ui text-[14px] font-medium mb-2 ${dark ? "text-white/60" : "text-ink-soft"}`}>
       {label}
     </span>
     {children}
-    {hint && <span className="block font-body text-[13px] text-ink-faint mt-1.5">{hint}</span>}
+    {hint && <span className={`block font-body text-[13px] mt-1.5 ${dark ? "text-white/40" : "text-ink-faint"}`}>{hint}</span>}
   </label>
 );
 
 const inputCls =
   "w-full bg-canvas text-ink border border-hairline rounded-[12px] font-body text-[17px] px-4 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors disabled:bg-parchment disabled:text-ink-faint";
 
+const darkInputCls =
+  "w-full bg-white/10 text-white placeholder:text-white/30 border border-white/15 rounded-[12px] font-body text-[17px] px-4 py-2.5 outline-none focus:border-primary-on-dark focus:ring-2 focus:ring-primary-on-dark/20 transition-colors";
+
 export const TextInput = (
   props: React.InputHTMLAttributes<HTMLInputElement>
 ) => <input {...props} className={inputCls} />;
+
+export const DarkTextInput = (
+  props: React.InputHTMLAttributes<HTMLInputElement>
+) => <input {...props} className={darkInputCls} />;
 
 export const TextArea = (
   props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
@@ -136,6 +145,10 @@ export const TextArea = (
 export const Select = (
   props: React.SelectHTMLAttributes<HTMLSelectElement>
 ) => <select {...props} className={inputCls} />;
+
+export const DarkSelect = (
+  props: React.SelectHTMLAttributes<HTMLSelectElement>
+) => <select {...props} className={`${darkInputCls} [&>option]:bg-tile-1 [&>option]:text-white`} />;
 
 /* ---- Filter / status tabs — pill segmented control ---- */
 export const FilterTabs = ({

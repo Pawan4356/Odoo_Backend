@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 170" width="170" height="170">
+  <defs>
+
+    <!-- Chrome/silver gradient — multi-stop for realistic metal -->
+    <linearGradient id="chrome-a" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%"   stop-color="#c8c8c8"/>
+      <stop offset="12%"  stop-color="#f2f2f2"/>
+      <stop offset="28%"  stop-color="#aaaaaa"/>
+      <stop offset="44%"  stop-color="#e6e6e6"/>
+      <stop offset="58%"  stop-color="#9a9a9a"/>
+      <stop offset="72%"  stop-color="#d4d4d4"/>
+      <stop offset="86%"  stop-color="#888888"/>
+      <stop offset="100%" stop-color="#b0b0b0"/>
+    </linearGradient>
+
+    <!-- Left face — slightly lighter / warmer highlight -->
+    <linearGradient id="chrome-left" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#e8e8e8"/>
+      <stop offset="35%"  stop-color="#f8f8f8"/>
+      <stop offset="65%"  stop-color="#b4b4b4"/>
+      <stop offset="100%" stop-color="#707070"/>
+    </linearGradient>
+
+    <!-- Right face — slightly cooler / darker -->
+    <linearGradient id="chrome-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#c0c0c0"/>
+      <stop offset="40%"  stop-color="#eeeeee"/>
+      <stop offset="75%"  stop-color="#989898"/>
+      <stop offset="100%" stop-color="#565656"/>
+    </linearGradient>
+
+    <!-- Specular shine layer -->
+    <linearGradient id="shine" x1="0%" y1="0%" x2="55%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.40"/>
+      <stop offset="45%"  stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.25"/>
+    </linearGradient>
+
+    <!-- Ambient shadow on mark base -->
+    <filter id="dropshadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.7"/>
+    </filter>
+
+    <!-- Subtle inner glow for 3D depth -->
+    <filter id="inner-glow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+  </defs>
+
+  <g filter="url(#dropshadow)" transform="translate(8,6)">
+
+    <!--  ── FULL BASE SHAPE (chrome fill) ──
+          Outer contour of entire mark
+          Coordinate space: ~130×155 px icon
+    -->
+    <path id="outer"
+      d="
+        M 52 8
+        L 20 52
+        L 8  88
+        C  7 112  19 135  40 146
+        C  52 153  62 156  72 157
+        C  82 156  92 153 104 146
+        C 125 135 137 112 136 88
+        L 124 52
+        L  92 8
+        L  74 42
+        L  70 45
+        L  66 42
+        Z
+      "
+      fill="url(#chrome-a)"
+    />
+
+    <!-- Left wing face — gives depth to left prong -->
+    <path
+      d="
+        M 52 8
+        L 66 42
+        C 59 52  52 65  49 80
+        C 47 92  48 103  51 112
+        L 38 95
+        L 20 52
+        Z
+      "
+      fill="url(#chrome-left)"
+    />
+
+    <!-- Right wing face — gives depth to right prong -->
+    <path
+      d="
+        M 92 8
+        L 78 42
+        C 85 52  92 65  95 80
+        C 97 92  96 103  93 112
+        L 106 95
+        L 124 52
+        Z
+      "
+      fill="url(#chrome-right)"
+    />
+
+    <!-- ── CUTOUT: top gap between prongs ── -->
+    <path
+      d="
+        M 66 42
+        L 70 30
+        L 74 42
+        L 72 47
+        L 68 47
+        Z
+      "
+      fill="#0c0c0c"
+    />
+
+    <!-- ── CUTOUT: left inner circular bite ── -->
+    <!--  The "Q"-like negative that defines the left inner face -->
+    <ellipse cx="50" cy="76" rx="16" ry="18" fill="#0c0c0c"/>
+
+    <!-- ── CUTOUT: bottom inner U (the major concave) ── -->
+    <path
+      d="
+        M 53 108
+        C 53  88  60 72  72 66
+        C 84  72  91 88  91 108
+        C 91 122  85 133  78 140
+        C 75 143  72 144  72 145
+        C 72 145  72 145  72 145
+        C 72 145  69 143  66 140
+        C 59 133  53 122  53 108
+        Z
+      "
+      fill="#0c0c0c"
+    />
+
+    <!-- ── SHINE overlay (on full outer shape) ── -->
+    <path
+      d="
+        M 52 8
+        L 20 52
+        L 8  88
+        C  7 112  19 135  40 146
+        C  52 153  62 156  72 157
+        C  82 156  92 153 104 146
+        C 125 135 137 112 136 88
+        L 124 52
+        L  92 8
+        L  74 42
+        L  70 45
+        L  66 42
+        Z
+      "
+      fill="url(#shine)"
+    />
+
+  </g>
+
+</svg>

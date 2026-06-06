@@ -9,8 +9,7 @@ import {
 } from "../components/ui";
 import type { Role } from "../types";
 import { api } from "../api/client";
-
-type Step = "form" | "otp";
+import fullLogo from "../assets/full-logo.png";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -20,8 +19,8 @@ const Register = () => {
 
   // form fields
   const [role, setRole] = useState<Role>("vendor");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [done, setDone] = useState(false);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [country, setCountry] = useState("India");
@@ -74,7 +73,7 @@ const Register = () => {
     setLoading(true);
     try {
       await api.register({
-        name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+        name: fullName.trim(),
         email: email.trim(),
         password,
         role,
@@ -122,18 +121,19 @@ const Register = () => {
   return (
     <AuthShell>
       <div className="max-w-[640px] mx-auto">
+        <form onSubmit={submit}>
+          <div className="rounded-[18px] border border-hairline bg-canvas overflow-hidden flex flex-col" style={{ maxHeight: "min(520px, 90vh)" }}>
+            <div className="flex flex-col items-center pt-10 pb-6 px-6 shrink-0">
+              <img src={fullLogo} alt="Quotor" className="h-20 w-auto object-contain" />
+            </div>
 
-        {/* ── STEP 1: Registration form ── */}
-        {step === "form" && (
-          <form onSubmit={handleSendOtp}>
-            <div className="rounded-[18px] border border-hairline bg-canvas p-6">
+            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] px-6 pb-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-                <Field label="First Name">
-                  <TextInput required value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
-                </Field>
-                <Field label="Last Name">
-                  <TextInput required value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
-                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Full Name">
+                    <TextInput required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" />
+                  </Field>
+                </div>
                 <Field label="Email">
                   <TextInput type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
                 </Field>
@@ -159,95 +159,25 @@ const Register = () => {
               </div>
 
               {error && (
-                <p className="font-body text-[14px] text-[#c4313b] mt-3">{error}</p>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center mt-6">
-              <ButtonPrimary type="submit">
-                {loading ? "Sending OTP..." : "Continue"}
-              </ButtonPrimary>
-              <p className="font-body text-[15px] text-ink-soft mt-4">
-                Already registered?{" "}
-                <Link to="/login" className="text-primary">Sign in</Link>
-              </p>
-            </div>
-          </form>
-        )}
-
-        {/* ── STEP 2: OTP verification ── */}
-        {step === "otp" && (
-          <form onSubmit={handleRegister}>
-            <div className="rounded-[18px] border border-hairline bg-canvas p-6">
-
-              {/* header */}
-              <div className="mb-6">
-                <h2 className="font-heading text-[18px] text-ink mb-1">
-                  Verify your email
-                </h2>
-                <p className="font-body text-[14px] text-ink-soft">
-                  We sent a 6-digit code to{" "}
-                  <span className="text-ink font-medium">{email}</span>.
-                  Enter it below to complete registration.
-                </p>
-              </div>
-
-              <Field label="One-Time Password">
-                <TextInput
-                  required
-                  value={otp}
-                  onChange={(e) => {
-                    // only allow digits, max 6
-                    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    setOtp(val);
-                    setOtpError("");
-                  }}
-                  placeholder="••••••"
-                  autoFocus
-                  inputMode="numeric"
-                />
-              </Field>
-
-              {otpError && (
-                <p className="font-body text-[14px] text-[#c4313b] mt-2">{otpError}</p>
+                <p className="font-body text-[14px] text-[#c4313b] mt-2">{error}</p>
               )}
 
-              {/* resend */}
-              <div className="mt-4 flex items-center gap-2">
-                <span className="font-body text-[14px] text-ink-soft">
-                  Didn't receive it?
-                </span>
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={resendCooldown > 0 || loading}
-                  className="font-body text-[14px] text-primary disabled:text-ink-soft disabled:cursor-not-allowed"
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
-                </button>
+              <div className="flex flex-col items-center mt-6 pb-2">
+                {done && (
+                  <p className="font-body text-[15px] text-ink-soft mb-3">
+                    Profile created — redirecting to sign in…
+                  </p>
+                )}
+                <ButtonPrimary type="submit">{loading ? "Creating..." : "Create account"}</ButtonPrimary>
               </div>
             </div>
+          </div>
 
-            <div className="flex flex-col items-center mt-6">
-              {done && (
-                <p className="font-body text-[15px] text-ink-soft mb-3">
-                  Profile created — redirecting to sign in…
-                </p>
-              )}
-              <ButtonPrimary type="submit" disabled={otp.length !== 6 || loading}>
-                {loading ? "Verifying..." : "Create account"}
-              </ButtonPrimary>
-              <button
-                type="button"
-                onClick={() => { setStep("form"); setOtp(""); setOtpError(""); setError(""); }}
-                className="font-body text-[15px] text-ink-soft mt-4 hover:text-ink"
-              >
-                ← Back to edit details
-              </button>
-            </div>
-          </form>
-        )}
-
+          <p className="font-body text-[15px] text-ink-soft text-center mt-6">
+            Already registered?{" "}
+            <Link to="/login" className="text-primary">Sign in</Link>
+          </p>
+        </form>
       </div>
     </AuthShell>
   );
