@@ -10,7 +10,7 @@
 | Role | Primary Responsibility | Key Screens |
 |---|---|---|
 | **Admin** | System oversight, user/vendor management, full audit access | Dashboard, Vendors, Reports, Activity |
-| **Manager / Approver** | Approve or reject procurement decisions | Dashboard, Approvals, Reports |
+| **Manager** | Approve or reject procurement decisions | Dashboard, Approvals, Reports |
 | **Procurement Officer** | Drive the full procurement cycle | Dashboard, Vendors, RFQs, Quotations, PO & Invoice |
 | **Vendor** | Respond to RFQs and track own orders | Dashboard, RFQs (received), Quotations, PO & Invoice |
 
@@ -66,7 +66,7 @@ Centered authentication card on a clean, minimal background. No ERP modules are 
 - Lands on: Dashboard (system-wide overview)
 - Sidebar unlocks: Dashboard, Vendors, RFQs, Quotations, Approvals, Purchase Orders, Invoices, Reports, Activity
 
-**Manager / Approver**
+**Manager**
 - Lands on: Dashboard (approval-focused overview)
 - Sidebar unlocks: Dashboard, Approvals, Reports, Activity
 
@@ -752,7 +752,7 @@ Provide a structured authorization step where managers review selected vendor qu
 
 | Role | Access |
 |---|---|
-| Manager / Approver | View pending requests; review quotation; add remarks; approve or reject |
+| Manager | View pending requests; review quotation; add remarks; approve or reject |
 | Procurement Officer | Track approval status; view manager remarks; receive outcome notifications |
 | Admin | Monitor all approval workflows; complete audit history |
 | Vendor | Cannot access approval workflow — sees only final RFQ/order status |
@@ -824,8 +824,8 @@ Allows approval decision without navigating away from the screen.
 
 | Button | Visible To | On Click Behavior |
 |---|---|---|
-| Approve | Manager / Approver | Save remarks → set status to Approved → enable PO generation → notify Procurement Officer |
-| Reject | Manager / Approver | Require remarks → save rejection reason → set status to Rejected → notify Procurement Officer |
+| Approve | Manager | Save remarks → set status to Approved → enable PO generation → notify Procurement Officer |
+| Reject | Manager | Require remarks → save rejection reason → set status to Rejected → notify Procurement Officer |
 
 ---
 
