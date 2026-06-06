@@ -10,6 +10,7 @@ export interface NavItem {
 // Sidebar Navigation — Role Visibility Matrix (structure.md Screen 03)
 export const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", path: "/dashboard", roles: ["admin", "manager", "officer", "vendor"] },
+  { key: "users", label: "Users", path: "/users", roles: ["admin"] },
   { key: "vendors", label: "Vendors", path: "/vendors", roles: ["admin", "manager", "officer"] },
   { key: "rfqs", label: "RFQs", path: "/rfqs", roles: ["admin", "officer", "vendor"] },
   { key: "quotations", label: "Quotations", path: "/quotations", roles: ["admin", "officer", "vendor"] },
@@ -18,6 +19,7 @@ export const NAV: NavItem[] = [
   { key: "invoices", label: "Invoices", path: "/invoices", roles: ["admin", "officer", "vendor"] },
   { key: "reports", label: "Reports", path: "/reports", roles: ["admin", "manager"] },
   { key: "activity", label: "Activity", path: "/activity", roles: ["admin", "manager", "officer", "vendor"] },
+  { key: "vendor-profile", label: "Vendor Profile", path: "/vendor-registration", roles: ["vendor"] },
 ];
 
 export const navForRole = (role: Role) =>

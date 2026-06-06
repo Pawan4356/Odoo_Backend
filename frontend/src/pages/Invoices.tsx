@@ -9,53 +9,67 @@ import {
   StatusBadge,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { PURCHASE_ORDERS, VENDORS, inr } from "../data/mock";
+import { inr } from "../data/mock";
 import type { PaymentStatus } from "../types";
 import { api } from "../api/client";
+import type { RichPO } from "../api/client";
+import { useLocation } from "react-router-dom";
+import type { RFQ } from "../types";
 
 const Invoices = () => {
   const { user, token } = useAuth();
   const role = user!.role;
-  const [orders, setOrders] = useState(PURCHASE_ORDERS);
+  const location = useLocation();
+  const initialRfqId = (location.state as { rfqId?: string } | null)?.rfqId;
+  const [orders, setOrders] = useState<RichPO[]>([]);
+  const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [loadError, setLoadError] = useState("");
-
-  // vendor sees only own PO
-  const list = role === "vendor"
-    ? orders.filter((p) => p.vendorId === "v-1" || p.vendorId === "")
-    : orders;
-
-  const [activeId, setActiveId] = useState(list[0]?.id ?? "");
-  const [payment, setPayment] = useState<PaymentStatus>(
-    list[0]?.payment ?? "Pending Payment"
-  );
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!token) return;
-    api
-      .purchaseOrders(token)
-      .then((rows) => {
-        if (rows.length > 0) {
-          setOrders(rows);
-          setActiveId(rows[0].id);
-          setPayment(rows[0].payment);
-        }
+    setLoading(true);
+    Promise.all([
+      api.purchaseOrders(token),
+      api.rfqs(token).catch(() => [] as RFQ[])
+    ])
+      .then(([poRows, rfqRows]) => {
+        setOrders(poRows);
+        setRfqs(rfqRows);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load purchase orders."));
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load data."))
+      .finally(() => setLoading(false));
   }, [token]);
 
-  const po = list.find((p) => p.id === activeId) ?? list[0];
-  if (!po) return <div className="font-body">No purchase orders.</div>;
+  const [activeRfqId, setActiveRfqId] = useState<string>(String(initialRfqId || ""));
+  const [activeId, setActiveId] = useState("");
+  const [payment, setPayment] = useState<PaymentStatus>("Pending Payment");
 
-  const vendor = VENDORS.find((v) => v.id === po.vendorId) ?? {
-    name: "Vendor",
-    address: "Address not available",
-    country: "India",
-    gst: "",
-    email: "",
-  };
-  const subtotal = po.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const taxAmt = (subtotal * po.taxPct) / 100;
-  const grand = subtotal + taxAmt - po.discount;
+  const rfqList = rfqs.length > 0 ? rfqs : Array.from(new Set(orders.map((po) => po.rfqId))).filter(Boolean).map(id => ({ id, title: `RFQ ${id}` } as RFQ));
+
+  // Update active RFQ when rfqs load
+  useEffect(() => {
+    if (rfqList.length > 0 && !activeRfqId) {
+      setActiveRfqId(String(rfqList[0].id));
+    }
+  }, [rfqList, activeRfqId]);
+
+  const posForActiveRfq = orders.filter((po) => po.rfqId === activeRfqId);
+
+  // Update active PO when active RFQ changes
+  useEffect(() => {
+    if (posForActiveRfq.length > 0 && !posForActiveRfq.some((p) => p.id === activeId)) {
+      setActiveId(posForActiveRfq[0].id);
+      setPayment(posForActiveRfq[0].payment);
+    }
+  }, [posForActiveRfq, activeId]);
+
+  const po = posForActiveRfq.find((p) => p.id === activeId) ?? posForActiveRfq[0];
+  if (loading) return <div className="font-body text-ink-faint">Loading purchase orders...</div>;
+
+  const subtotal = po ? po.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0) : 0;
+  const taxAmt = po ? (subtotal * po.taxPct) / 100 : 0;
+  const grand = po ? subtotal + taxAmt - po.discount : 0;
 
   const canEmail = role === "admin" || role === "officer";
   const canPay = role === "admin" || role === "officer";
@@ -65,12 +79,12 @@ const Invoices = () => {
     <div>
       <PageHeader
         title="Purchase Order & Invoice"
-        subtitle={`${po.id} · auto-generated, not editable`}
+        subtitle={po ? `${po.id} · auto-generated, not editable` : "No purchase orders generated"}
         action={
           <div className="flex flex-wrap gap-2">
-            {canDownload && <ButtonSecondary onClick={() => window.print()}>Download PDF</ButtonSecondary>}
-            {canDownload && <ButtonSecondary onClick={() => window.print()}>Print</ButtonSecondary>}
-            {canEmail && <ButtonPrimary onClick={() => alert("Invoice emailed to vendor. Logged in Activity.")}>Email Invoice</ButtonPrimary>}
+            {po && canDownload && <ButtonSecondary onClick={() => window.print()}>Download PDF</ButtonSecondary>}
+            {po && canDownload && <ButtonSecondary onClick={() => window.print()}>Print</ButtonSecondary>}
+            {po && canEmail && <ButtonPrimary onClick={() => alert("Invoice emailed to vendor. Logged in Activity.")}>Email Invoice</ButtonPrimary>}
           </div>
         }
       />
@@ -79,44 +93,70 @@ const Invoices = () => {
         <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
       )}
 
-      {/* PO selector when more than one */}
-      {list.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {list.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                setActiveId(p.id);
-                setPayment(p.payment);
-              }}
-              className={`press active:press-active font-ui text-[14px] px-4 py-1.5 rounded-pill cursor-pointer transition-colors ${
-                p.id === activeId ? "bg-primary text-on-primary" : "bg-canvas text-ink-soft border border-hairline"
-              }`}
-            >
-              {p.id}
-            </button>
-          ))}
+      {/* RFQ selector */}
+      {rfqList.length > 0 && (
+        <div className="mb-4 max-w-sm">
+          <label className="block font-ui text-[14px] text-ink-soft mb-2">Select RFQ</label>
+          <select
+            value={activeRfqId}
+            onChange={(e) => setActiveRfqId(e.target.value)}
+            className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 font-body text-[15px] focus:outline-none focus:border-primary appearance-none cursor-pointer"
+          >
+            {rfqList.map((r) => (
+              <option key={r.id} value={String(r.id)}>
+                {r.title}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
-      {/* buyer + vendor cards */}
+      {/* PO selector when more than one for the active RFQ */}
+      {posForActiveRfq.length > 1 && (
+        <div className="mb-4 max-w-sm">
+          <label className="block font-ui text-[14px] text-ink-soft mb-2">Select Purchase Order</label>
+          <select
+            value={activeId}
+            onChange={(e) => {
+              const val = e.target.value;
+              setActiveId(val);
+              const selectedPO = posForActiveRfq.find(p => p.id === val);
+              if (selectedPO) setPayment(selectedPO.payment);
+            }}
+            className="w-full bg-canvas border border-hairline rounded-lg px-3 py-2 font-body text-[15px] focus:outline-none focus:border-primary appearance-none cursor-pointer"
+          >
+            {posForActiveRfq.map((p) => (
+              <option key={p.id} value={p.id}>
+                PO: {p.id}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!po ? (
+        <div className="font-body text-[15px] text-ink-soft mt-8 text-center border-t border-hairline py-12">
+          No purchase orders have been generated for this RFQ yet.
+        </div>
+      ) : (
+        <>
+          {/* buyer + vendor cards — DYNAMIC */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="rounded-[18px] border border-hairline bg-canvas overflow-hidden">
           <div className="px-5 py-3 border-b border-hairline-soft font-ui text-[14px] font-semibold text-ink">Buyer</div>
           <div className="px-5 py-4 font-body text-[15px] text-ink-soft space-y-0.5 [&_strong]:text-ink [&_strong]:font-medium">
-            <p><strong>VendorBridge Pvt. Ltd.</strong></p>
-            <p>Plot 22, Tech Park, Pune, India</p>
-            <p>GSTIN: 27AAVCV1234B1Z0</p>
-            <p>accounts@vendorbridge.io</p>
+            <p><strong>{po.buyerName}</strong></p>
+            <p>{po.buyerEmail || "accounts@company.io"}</p>
           </div>
         </div>
         <div className="rounded-[18px] border border-hairline bg-canvas overflow-hidden">
           <div className="px-5 py-3 border-b border-hairline-soft font-ui text-[14px] font-semibold text-ink">Vendor</div>
           <div className="px-5 py-4 font-body text-[15px] text-ink-soft space-y-0.5 [&_strong]:text-ink [&_strong]:font-medium">
-            <p><strong>{vendor.name}</strong></p>
-            <p>{vendor.address}, {vendor.country}</p>
-            <p>GSTIN: {vendor.gst}</p>
-            <p>{vendor.email}</p>
+            <p><strong>{po.vendorName}</strong></p>
+            {po.vendorContact && <p>Contact: {po.vendorContact}</p>}
+            {po.vendorGst && <p>GSTIN: {po.vendorGst}</p>}
+            <p>{po.vendorEmail}</p>
+            {po.vendorPhone && <p>{po.vendorPhone}</p>}
           </div>
         </div>
       </div>
@@ -126,7 +166,7 @@ const Invoices = () => {
         <div><span className="font-ui text-[13px] text-ink-faint block mb-0.5">PO Number</span>{po.id}</div>
         <div><span className="font-ui text-[13px] text-ink-faint block mb-0.5">PO Date</span>{po.poDate}</div>
         <div><span className="font-ui text-[13px] text-ink-faint block mb-0.5">Invoice Date</span>{po.invoiceDate}</div>
-        <div><span className="font-ui text-[13px] text-ink-faint block mb-0.5">Due Date</span>{po.dueDate}</div>
+        <div><span className="font-ui text-[13px] text-ink-faint block mb-0.5">RFQ</span>{po.rfqTitle || po.rfqId || "—"}</div>
       </div>
 
       {/* invoice item table */}
@@ -140,8 +180,8 @@ const Invoices = () => {
           </>
         }
       >
-        {po.lines.map((l) => (
-          <tr key={l.name}>
+        {po.lines.map((l, i) => (
+          <tr key={`${l.name}-${i}`}>
             <Td>{l.name}</Td>
             <Td>{l.quantity}</Td>
             <Td>{inr(l.unitPrice)}</Td>
@@ -197,6 +237,8 @@ const Invoices = () => {
         Invoice details are never editable post-generation — all data flows from the approved
         quotation. {role === "vendor" && "No financial controls are shown to vendor accounts."}
       </p>
+        </>
+      )}
     </div>
   );
 };

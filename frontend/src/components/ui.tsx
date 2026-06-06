@@ -68,15 +68,18 @@ export const ButtonPrimary = ({
   children,
   onClick,
   type = "button",
+  disabled = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
   type?: "button" | "submit";
+  disabled?: boolean;
 }) => (
   <button
     type={type}
     onClick={onClick}
-    className="press active:press-active inline-flex items-center justify-center rounded-pill bg-primary text-on-primary font-ui text-[17px] px-[22px] py-[10px] cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-primary-focus"
+    disabled={disabled}
+    className="press active:press-active inline-flex items-center justify-center rounded-pill bg-primary text-on-primary font-ui text-[17px] px-[22px] py-[10px] cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-primary-focus disabled:opacity-50 disabled:pointer-events-none"
   >
     {children}
   </button>
@@ -206,8 +209,14 @@ export const Table = ({
   </div>
 );
 
-export const Th = ({ children }: { children: ReactNode }) => (
-  <th className="font-ui text-[13px] font-medium text-ink-faint px-4 py-3">
+export const Th = ({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) => (
+  <th className={`font-ui text-[13px] font-medium text-ink-faint px-4 py-3 ${className}`}>
     {children}
   </th>
 );

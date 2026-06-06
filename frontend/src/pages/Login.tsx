@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import fullLogo from "../assets/full-logo.png";
 
 const Login = () => {
-  const { login, vendorProfileComplete } = useAuth();
+  const { login, setVendorProfile } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,11 +25,23 @@ const Login = () => {
     try {
       const session = await api.login(email.trim(), password);
       login(session);
-      navigate(
-        session.user.role === "vendor" && !vendorProfileComplete
-          ? "/vendor-registration"
-          : "/dashboard",
-      );
+
+      if (session.user.role === "vendor") {
+        try {
+          const profile = await api.getMyVendorProfile(session.token);
+          if (profile) {
+            setVendorProfile(profile);
+            navigate("/dashboard");
+          } else {
+            navigate("/vendor-registration");
+          }
+        } catch {
+          // If fetching profile fails, send to registration as fallback
+          navigate("/vendor-registration");
+        }
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {

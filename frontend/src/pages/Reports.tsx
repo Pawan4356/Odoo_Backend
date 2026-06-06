@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   PageHeader,
   StatCard,
@@ -5,53 +6,49 @@ import {
   Th,
   Td,
   ButtonSecondary,
-  Select,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { inr } from "../data/mock";
-
-const CATEGORY_SPEND = [
-  { label: "IT Hardware", value: 480000 },
-  { label: "Furniture", value: 320000 },
-  { label: "Logistics", value: 230000 },
-  { label: "Stationery", value: 210000 },
-];
-
-const TOP_VENDORS = [
-  { name: "TechCore Ltd", spend: 420000, pos: 6 },
-  { name: "Infra Supplies", spend: 264500, pos: 4 },
-  { name: "Office Mart Corp", spend: 158000, pos: 5 },
-];
-
-const MONTHLY = [
-  { m: "Jan", v: 62 },
-  { m: "Feb", v: 48 },
-  { m: "Mar", v: 81 },
-  { m: "Apr", v: 70 },
-  { m: "May", v: 94 },
-];
+import { api } from "../api/client";
+import type { ReportData } from "../api/client";
 
 const Reports = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const role = user!.role;
   const isAdminOrMgr = role === "admin" || role === "manager";
-  const maxCat = Math.max(...CATEGORY_SPEND.map((c) => c.value));
-  const maxMonth = Math.max(...MONTHLY.map((m) => m.v));
+
+  const [data, setData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    api
+      .getReports(token)
+      .then((d) => {
+        setData(d);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load reports."))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  if (loading) return <div className="font-body text-ink-faint">Loading reports...</div>;
+  if (loadError) return <p className="font-body text-[14px] text-[#c4313b]">{loadError}</p>;
+  if (!data) return <div className="font-body text-ink-faint">No report data available.</div>;
+
+  const { summary, categorySpend, topVendors, monthly } = data;
+  const maxCat = Math.max(...categorySpend.map((c) => c.value), 1);
+  const maxMonth = Math.max(...monthly.map((m) => m.v), 1);
 
   return (
     <div>
       <PageHeader
         title="Reports & Analytics"
-        subtitle="Procurement Insights — May 2026"
+        subtitle="Procurement Insights"
         action={
           <div className="flex items-center gap-3">
-            <div className="w-[140px]">
-              <Select defaultValue="May 2026">
-                <option>May 2026</option>
-                <option>Q2 2026</option>
-                <option>FY 2026</option>
-              </Select>
-            </div>
             {isAdminOrMgr && <ButtonSecondary>Export</ButtonSecondary>}
           </div>
         }
@@ -59,18 +56,21 @@ const Reports = () => {
 
       {/* summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-        <StatCard label="Total Spend" value={inr(1240000)} sub="completed POs" />
-        <StatCard label="Active Vendors" value={28} sub="approved suppliers" />
-        <StatCard label="PO Fulfilled %" value="94%" sub="completed ÷ total" />
+        <StatCard label="Total Spend" value={inr(summary.totalSpend)} sub="completed POs" />
+        <StatCard label="Active Vendors" value={summary.activeVendors} sub="approved suppliers" />
+        <StatCard label="PO Fulfilled %" value={`${summary.poFulfilledPct}%`} sub="completed ÷ total" />
         {isAdminOrMgr && (
-          <StatCard label="Pending Issues" value={3} sub="approvals + delays" />
+          <StatCard label="Pending Issues" value={summary.pendingIssues} sub="approvals + delays" />
         )}
       </div>
 
       {/* spending by category — horizontal bars */}
       <h2 className="font-display text-[24px] font-semibold tracking-[-0.01em] text-ink mb-4">Spending by category</h2>
       <div className="rounded-[18px] border border-hairline bg-canvas p-6 mb-12">
-        {CATEGORY_SPEND.map((c) => (
+        {categorySpend.length === 0 && (
+          <p className="font-body text-[15px] text-ink-faint text-center py-4">No spending data yet.</p>
+        )}
+        {categorySpend.map((c) => (
           <div key={c.label} className="flex items-center gap-4 mb-4 last:mb-0">
             <span className="w-[110px] shrink-0 font-ui text-[14px] text-ink-soft">
               {c.label}
@@ -99,31 +99,42 @@ const Reports = () => {
               </>
             }
           >
-            {TOP_VENDORS.map((v) => (
+            {topVendors.map((v) => (
               <tr key={v.name}>
                 <Td>{v.name}</Td>
                 <Td>{inr(v.spend)}</Td>
                 <Td>{v.pos} POs</Td>
               </tr>
             ))}
+            {topVendors.length === 0 && (
+              <tr>
+                <td colSpan={3} className="font-body text-[15px] text-ink-faint px-4 py-6 text-center">
+                  No vendor spend data yet.
+                </td>
+              </tr>
+            )}
           </Table>
 
           <h2 className="font-display text-[24px] font-semibold tracking-[-0.01em] text-ink mt-12 mb-4">
             Monthly procurement trend
           </h2>
           <div className="rounded-[18px] border border-hairline bg-canvas p-6">
-            <div className="flex items-end gap-4 h-[180px]">
-              {MONTHLY.map((d) => (
-                <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full">
-                  <span className="font-ui text-[12px] text-ink-soft mb-2">{d.v}</span>
-                  <div
-                    className="bg-primary rounded-t-[6px] w-full"
-                    style={{ height: `${(d.v / maxMonth) * 100}%` }}
-                  />
-                  <span className="font-ui text-[12px] text-ink-faint mt-2">{d.m}</span>
-                </div>
-              ))}
-            </div>
+            {monthly.length === 0 ? (
+              <p className="font-body text-[15px] text-ink-faint text-center py-4">No monthly data yet.</p>
+            ) : (
+              <div className="flex items-end gap-4 h-[180px]">
+                {monthly.map((d) => (
+                  <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full">
+                    <span className="font-ui text-[12px] text-ink-soft mb-2">{d.v > 0 ? inr(d.v) : "0"}</span>
+                    <div
+                      className="bg-primary rounded-t-[6px] w-full"
+                      style={{ height: `${(d.v / maxMonth) * 100}%` }}
+                    />
+                    <span className="font-ui text-[12px] text-ink-faint mt-2">{d.m}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       ) : (

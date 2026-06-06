@@ -13,16 +13,10 @@ import {
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { welcomeFor } from "../auth/nav";
-import {
-  PURCHASE_ORDERS,
-  RFQS,
-  VENDORS,
-  APPROVALS,
-  vendorName,
-  inr,
-} from "../data/mock";
-import type { Role } from "../types";
+import { inr } from "../data/mock";
+import type { Role, RFQ } from "../types";
 import { api } from "../api/client";
+import type { RichPO, BackendApproval } from "../api/client";
 
 /* Analytics card visibility per role (structure.md Screen 03) */
 const cardVisible = (role: Role, card: string) => {
@@ -38,36 +32,36 @@ const cardVisible = (role: Role, card: string) => {
 const Dashboard = () => {
   const { user, token, vendorProfileComplete } = useAuth();
   const navigate = useNavigate();
-  const [rfqs, setRfqs] = useState(RFQS);
-  const [vendors, setVendors] = useState(VENDORS);
-  const [purchaseOrders, setPurchaseOrders] = useState(PURCHASE_ORDERS);
+  const [rfqs, setRfqs] = useState<RFQ[]>([]);
+  const [vendorCount, setVendorCount] = useState(0);
+  const [purchaseOrders, setPurchaseOrders] = useState<RichPO[]>([]);
+  const [approvals, setApprovals] = useState<BackendApproval[]>([]);
   const role = user?.role ?? "vendor";
 
   useEffect(() => {
     if (!token) return;
-    api.purchaseOrders(token).then((rows) => rows.length && setPurchaseOrders(rows)).catch(() => undefined);
+    // Fetch POs for all roles
+    api.purchaseOrders(token).then((rows) => setPurchaseOrders(rows)).catch(() => undefined);
+    // Fetch RFQs for all roles (backend filters for vendor)
+    api.rfqs(token).then((rows) => setRfqs(rows)).catch(() => undefined);
+    // Fetch vendors count for non-vendor roles
     if (role !== "vendor") {
-      api.rfqs(token).then((rows) => setRfqs(rows)).catch(() => undefined);
-      api.vendors(token).then((rows) => setVendors(rows)).catch(() => undefined);
+      api.vendors(token).then((rows) => setVendorCount(rows.filter((v) => v.status === "Active").length)).catch(() => undefined);
+    }
+    // Fetch approvals for admin/manager/officer
+    if (role !== "vendor") {
+      api.getApprovals(token).then((rows) => setApprovals(rows)).catch(() => undefined);
     }
   }, [role, token]);
 
   if (!user) return null;
 
   const activeRfqs = rfqs.filter((r) => r.status === "Active").length;
-  const pendingApprovals = APPROVALS.filter((a) => a.status === "Pending Approval").length;
+  const pendingApprovals = approvals.filter((a) => !a.approval_status || a.approval_status === "Pending").length;
   const poValue = purchaseOrders.reduce(
     (s, p) => s + p.lines.reduce((x, l) => x + l.quantity * l.unitPrice, 0),
     0
   );
-  const activeVendors = vendors.filter((v) => v.status === "Active").length;
-
-  // Recent PO scoping by role
-  const visiblePOs = purchaseOrders.filter((p) =>
-    role === "vendor" ? p.vendorId === "v-1" || p.vendorId === "" : true
-  );
-
-  const showChart = role === "admin" || role === "manager";
 
   return (
     <div>
@@ -87,7 +81,7 @@ const Dashboard = () => {
           <StatCard label="PO Value / Month" value={inr(poValue)} sub="issued purchase orders" />
         )}
         {cardVisible(role, "Active Vendors") && (
-          <StatCard label="Active Vendors" value={activeVendors} sub="approved suppliers" />
+          <StatCard label="Active Vendors" value={vendorCount} sub="approved suppliers" />
         )}
       </div>
 
@@ -106,17 +100,17 @@ const Dashboard = () => {
           </>
         }
       >
-        {visiblePOs.map((po) => {
+        {purchaseOrders.map((po) => {
           const amount = po.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
           return (
             <tr key={po.id}>
-              <Td>{po.id}</Td>
-              <Td>{vendorName(po.vendorId)}</Td>
+              <Td>{po.rfqTitle || po.id}</Td>
+              <Td>{po.vendorName}</Td>
               <Td>{inr(amount)}</Td>
               <Td><StatusBadge status={po.payment} /></Td>
               <Td>
                 <button
-                  onClick={() => navigate("/invoices")}
+                  onClick={() => navigate("/invoices", { state: { rfqId: po.rfqId } })}
                   className="text-primary cursor-pointer font-body text-[15px]"
                 >
                   View PO
@@ -125,15 +119,22 @@ const Dashboard = () => {
             </tr>
           );
         })}
+        {purchaseOrders.length === 0 && (
+          <tr>
+            <td colSpan={5} className="font-body text-[15px] text-ink-soft px-4 py-6 text-center">
+              No purchase orders yet.
+            </td>
+          </tr>
+        )}
       </Table>
 
       {/* spending trend — Admin + Manager only */}
-      {showChart && (
+      {(role === "admin" || role === "manager") && (
         <div className="mt-12">
           <h2 className="font-display text-[24px] font-semibold tracking-[-0.01em] text-ink mb-4">
             Spending trend
           </h2>
-          <MiniBarChart />
+          <MiniBarChart token={token!} />
         </div>
       )}
 
@@ -177,23 +178,28 @@ const Dashboard = () => {
   );
 };
 
-/* Period-accurate flat bar chart (no gradients, hard borders) */
-const MiniBarChart = () => {
-  const data = [
-    { m: "Jan", v: 62 },
-    { m: "Feb", v: 48 },
-    { m: "Mar", v: 81 },
-    { m: "Apr", v: 70 },
-    { m: "May", v: 94 },
-    { m: "Jun", v: 55 },
-  ];
-  const max = Math.max(...data.map((d) => d.v));
+/* Dynamic bar chart from reports API */
+const MiniBarChart = ({ token }: { token: string }) => {
+  const [data, setData] = useState<{ m: string; v: number }[]>([]);
+  useEffect(() => {
+    api.getReports(token).then((d) => setData(d.monthly)).catch(() => undefined);
+  }, [token]);
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-[18px] border border-hairline bg-canvas p-6">
+        <p className="font-body text-[15px] text-ink-faint text-center py-4">No spending data yet.</p>
+      </div>
+    );
+  }
+
+  const max = Math.max(...data.map((d) => d.v), 1);
   return (
     <div className="rounded-[18px] border border-hairline bg-canvas p-6">
       <div className="flex items-end gap-4 h-[180px]">
         {data.map((d) => (
           <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full">
-            <span className="font-ui text-[12px] text-ink-soft mb-2">{d.v}</span>
+            <span className="font-ui text-[12px] text-ink-soft mb-2">{d.v > 0 ? inr(d.v) : "0"}</span>
             <div
               className="bg-primary rounded-t-[6px] w-full"
               style={{ height: `${(d.v / max) * 100}%` }}

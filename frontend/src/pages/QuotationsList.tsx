@@ -2,21 +2,16 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PageHeader,
-  ButtonPrimary,
   Table,
   Th,
   Td,
-  StatusBadge,
   TextInput,
-  FilterTabs,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/client";
 import type { RFQ } from "../types";
 
-const TABS = ["All", "Active", "Closed"];
-
-const RFQList = () => {
+const QuotationsList = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const role = user!.role;
@@ -24,8 +19,6 @@ const RFQList = () => {
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  
-  const [tab, setTab] = useState("All");
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -42,28 +35,21 @@ const RFQList = () => {
   }, [token]);
 
   const filtered = useMemo(() => {
-    return rfqs
-      .filter((r) => (tab === "All" ? true : r.status === tab))
-      .filter((r) => {
-        const s = q.trim().toLowerCase();
-        if (!s) return true;
-        return [r.id, r.title, r.category].join(" ").toLowerCase().includes(s);
-      });
-  }, [tab, q, rfqs]);
+    return rfqs.filter((r) => {
+      const s = q.trim().toLowerCase();
+      if (!s) return true;
+      return [r.id, r.title, r.category].join(" ").toLowerCase().includes(s);
+    });
+  }, [q, rfqs]);
 
   return (
     <div>
       <PageHeader
-        title="RFQs"
+        title="Quotations"
         subtitle={
           isVendor
-            ? "Request for Quotations assigned to you"
-            : "Request for Quotations — create, publish and track"
-        }
-        action={
-          role === "officer" && (
-            <ButtonPrimary onClick={() => navigate("/rfqs/new")}>+ Create RFQ</ButtonPrimary>
-          )
+            ? "Your submitted and pending quotations"
+            : "Review quotations by RFQ"
         }
       />
 
@@ -75,10 +61,8 @@ const RFQList = () => {
         />
       </div>
 
-      <FilterTabs tabs={TABS} active={tab} onChange={setTab} />
-
       {loading && (
-        <p className="font-body text-[14px] text-ink-faint mb-3">Loading RFQs...</p>
+        <p className="font-body text-[14px] text-ink-faint mb-3">Loading...</p>
       )}
       {loadError && (
         <p className="font-body text-[14px] text-[#c4313b] mb-3">{loadError}</p>
@@ -92,7 +76,6 @@ const RFQList = () => {
             <Th>Category</Th>
             <Th>Deadline</Th>
             <Th>Vendors</Th>
-            <Th>Status</Th>
             <Th>Action</Th>
           </>
         }
@@ -104,7 +87,6 @@ const RFQList = () => {
             <Td>{r.category}</Td>
             <Td>{r.deadline}</Td>
             <Td>{isVendor ? "—" : `${r.vendorIds.length} assigned`}</Td>
-            <Td><StatusBadge status={r.status} /></Td>
             <Td>
               <button
                 onClick={() =>
@@ -114,29 +96,21 @@ const RFQList = () => {
                 }
                 className="text-primary cursor-pointer font-body"
               >
-                {isVendor ? "Submit Quote" : "View Quotes"}
+                {isVendor ? "Submit / View Quote" : "Compare Quotes"}
               </button>
             </Td>
           </tr>
         ))}
         {!loading && filtered.length === 0 && (
           <tr>
-            <td colSpan={7} className="font-body text-[15px] text-ink-soft px-4 py-6 border-t border-hairline-soft text-center">
-              {rfqs.length === 0 
-                ? (isVendor ? "No RFQs assigned to you yet." : "No RFQs found.")
-                : "No RFQs match your filters."}
+            <td colSpan={6} className="font-body text-[15px] text-ink-soft px-4 py-6 border-t border-hairline-soft text-center">
+              {rfqs.length === 0 ? "No active RFQs found for quotations." : "No quotations match your search."}
             </td>
           </tr>
         )}
       </Table>
-
-      <p className="font-body text-[14px] text-ink-faint mt-4">
-        {isVendor
-          ? `Showing ${filtered.length} assigned RFQ(s).`
-          : `Showing ${filtered.length} of ${rfqs.length} RFQ(s).`}
-      </p>
     </div>
   );
 };
 
-export default RFQList;
+export default QuotationsList;

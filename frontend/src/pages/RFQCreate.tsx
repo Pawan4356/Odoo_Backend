@@ -14,7 +14,6 @@ import {
   Td,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { VENDORS } from "../data/mock";
 import type { RFQItem, Vendor } from "../types";
 import { api } from "../api/client";
 
@@ -35,7 +34,7 @@ const RFQCreate = () => {
   ]);
   const [selected, setSelected] = useState<string[]>([]);
   const [picker, setPicker] = useState(false);
-  const [vendors, setVendors] = useState<Vendor[]>(VENDORS);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -45,7 +44,7 @@ const RFQCreate = () => {
     api
       .vendors(token)
       .then((rows) => setVendors(rows))
-      .catch(() => setVendors(VENDORS));
+      .catch(() => setVendors([]));
   }, [role, token]);
 
   // Only Procurement Officer can create
@@ -141,7 +140,7 @@ const RFQCreate = () => {
               <TextInput
                 type="date"
                 value={deadline}
-                min="2026-06-06"
+                min={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setDeadline(e.target.value)}
               />
             </Field>
@@ -166,8 +165,8 @@ const RFQCreate = () => {
                 head={
                   <>
                     <Th>Item Name</Th>
-                    <Th>Qty</Th>
-                    <Th>Unit</Th>
+                    <Th className="w-[120px]">Qty</Th>
+                    <Th className="w-[100px]">Unit</Th>
                     <Th>—</Th>
                   </>
                 }
@@ -181,15 +180,16 @@ const RFQCreate = () => {
                         placeholder="Item"
                       />
                     </Td>
-                    <Td className="w-[80px]">
+                    <Td className="w-[120px]">
                       <TextInput
                         type="number"
                         min={1}
                         value={it.quantity}
                         onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
+                        className="min-w-[80px]"
                       />
                     </Td>
-                    <Td className="w-[90px]">
+                    <Td className="w-[100px]">
                       <TextInput
                         value={it.unit}
                         onChange={(e) => updateItem(i, { unit: e.target.value })}
@@ -222,13 +222,13 @@ const RFQCreate = () => {
                   <span className="font-body text-[15px] text-ink-faint">No vendors selected.</span>
                 )}
                 {selected.map((id) => {
-                  const v = vendors.find((x) => x.id === id)!;
+                  const v = vendors.find((x) => x.id === id);
                   return (
                     <span
                       key={id}
                       className="rounded-pill bg-primary/10 text-primary font-ui text-[14px] px-3 py-1.5 flex items-center gap-2"
                     >
-                      {v.name}
+                      {v?.name ?? `Vendor #${id}`}
                       <button
                         onClick={() => toggleVendor(id)}
                         className="cursor-pointer text-primary/70 hover:text-primary"
@@ -240,21 +240,6 @@ const RFQCreate = () => {
                 })}
               </div>
               <ButtonSecondary onClick={() => setPicker(true)}>+ Add Vendor</ButtonSecondary>
-            </div>
-          </div>
-
-          {/* attachment upload */}
-          <div className="rounded-[18px] border border-hairline bg-canvas overflow-hidden">
-            <div className="px-5 py-3 border-b border-hairline-soft font-ui text-[14px] font-semibold text-ink">
-              Attachments
-            </div>
-            <div className="p-6">
-              <div className="rounded-[14px] border border-dashed border-hairline bg-parchment px-4 py-10 text-center font-body text-[15px] text-ink-soft">
-                Drag &amp; drop product specifications, requirement documents, images
-                <div className="mt-4">
-                  <ButtonSecondary>Browse Files</ButtonSecondary>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -333,6 +318,11 @@ const VendorPicker = ({
                 </label>
               </li>
             ))}
+            {rows.length === 0 && (
+              <li className="px-4 py-6 text-center font-body text-[15px] text-ink-faint">
+                No active vendors found.
+              </li>
+            )}
           </ul>
           <div className="flex justify-end mt-4">
             <ButtonPrimary onClick={onClose}>Done</ButtonPrimary>

@@ -3,28 +3,22 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader, ButtonPrimary } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import {
-  RFQS,
-  QUOTATIONS,
-  VENDORS,
-  vendorName,
   inr,
   quoteSubtotal,
 } from "../data/mock";
 import { api } from "../api/client";
 import type { Quotation, RFQ } from "../types";
 
-const DEFAULT_RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
+const EMPTY_RFQ: RFQ = { id: "", title: "Loading...", category: "", deadline: "", description: "", status: "Active", items: [], vendorIds: [], createdBy: "" };
 
 const QuotationCompare = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const role = user!.role;
-  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? DEFAULT_RFQ.id;
-  const [rfq, setRfq] = useState<RFQ>(DEFAULT_RFQ);
-  const [quotes, setQuotes] = useState<(Quotation & { vendorName?: string; totalAmount?: number })[]>(
-    QUOTATIONS.filter((q) => q.rfqId === DEFAULT_RFQ.id),
-  );
+  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? "";
+  const [rfq, setRfq] = useState<RFQ>(EMPTY_RFQ);
+  const [quotes, setQuotes] = useState<(Quotation & { vendorName?: string; totalAmount?: number })[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
 
@@ -48,7 +42,7 @@ const QuotationCompare = () => {
         q.lines.length > 0
           ? q.lines.reduce((s, l) => s + l.deliveryDays, 0) / q.lines.length
           : 0;
-      const rating = VENDORS.find((v) => v.id === q.vendorId)?.rating ?? 0;
+      const rating = 0; // Backend doesn't support vendor ratings yet
       return { q, total, avgDelivery, rating };
     });
     const minTotal = Math.min(...rows.map((r) => r.total || 1));
@@ -83,10 +77,8 @@ const QuotationCompare = () => {
 
   const criteria = [
     { key: "total", label: "Grand Total" },
-    { key: "gst", label: "GST %" },
-    { key: "delivery", label: "Delivery Days" },
-    { key: "rating", label: "Vendor Rating" },
-    { key: "payment", label: "Payment Terms" },
+    { key: "delivery", label: "Delivery Timeline" },
+    { key: "notes", label: "Notes" },
   ] as const;
 
   const cell = (id: string, key: string) => {
@@ -94,14 +86,10 @@ const QuotationCompare = () => {
     switch (key) {
       case "total":
         return inr(row.total);
-      case "gst":
-        return `${row.q.taxPct}%`;
       case "delivery":
-        return `${row.avgDelivery} days`;
-      case "rating":
-        return row.rating ? `${row.rating} / 5` : "—";
-      case "payment":
-        return `${row.q.paymentTermDays} days`;
+        return row.q.deliveryTimeline || "N/A";
+      case "notes":
+        return row.q.notes || "-";
     }
   };
 
@@ -110,7 +98,7 @@ const QuotationCompare = () => {
     setTimeout(() => navigate("/approvals", { state: { quotationId: id, rfqId: rfq.id } }), 900);
   };
 
-  const canSelect = role === "officer";
+  const canSelect = role === "manager";
 
   return (
     <div>
@@ -135,7 +123,7 @@ const QuotationCompare = () => {
                     q.id === scored.bestId ? "bg-primary/[0.06] text-primary" : "text-ink"
                   }`}
                 >
-                  {q.vendorName ?? vendorName(q.vendorId)}
+                  {q.vendorName ?? `Vendor ${q.vendorId}`}
                   {q.id === scored.bestId && (
                     <span className="block font-body text-[12px] font-normal text-primary mt-0.5">★ recommended</span>
                   )}
@@ -188,15 +176,14 @@ const QuotationCompare = () => {
 
       {selectedId && (
         <div className="rounded-[14px] border border-hairline bg-parchment px-5 py-4 mt-5 font-body text-[15px] text-ink-soft">
-          {quotes.find((q) => q.id === selectedId)?.vendorName ?? vendorName(quotes.find((q) => q.id === selectedId)!.vendorId)} selected —
+          {quotes.find((q) => q.id === selectedId)?.vendorName ?? `Vendor ${quotes.find((q) => q.id === selectedId)!.vendorId}`} selected —
           forwarding to manager for approval…
         </div>
       )}
 
-      {role === "manager" && (
+      {role === "officer" && (
         <p className="font-body text-[14px] text-ink-faint mt-4">
-          Comparison shown for context. Selection cannot be modified here — approve or reject
-          on the Approvals screen.
+          Comparison shown for context. Only Managers can select a quotation for approval.
         </p>
       )}
     </div>

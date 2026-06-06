@@ -10,14 +10,14 @@ import {
   FilterTabs,
   TextInput,
   Field,
+  Select,
   SectionEyebrow,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { VENDORS } from "../data/mock";
 import type { Vendor } from "../types";
 import { api } from "../api/client";
 
-const TABS = ["All", "Active", "Pending", "Removed"];
+const TABS = ["All", "Active", "Pending", "Removed", "Blacklisted"];
 
 const Vendors = () => {
   const { user, token, vendorProfile } = useAuth();
@@ -25,16 +25,17 @@ const Vendors = () => {
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<Vendor | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>(VENDORS);
-  const [loading, setLoading] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
   const role = user!.role;
-  const canAdd = role === "admin" || role === "officer";
+  const canAdd = role === "admin";
   const canEdit = role === "admin";
 
-  useEffect(() => {
+  const loadVendors = () => {
     if (!token || role === "vendor") return;
+    setLoading(true);
     api
       .vendors(token)
       .then((rows) => {
@@ -43,7 +44,20 @@ const Vendors = () => {
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Unable to load vendors."))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadVendors();
   }, [role, token]);
+
+  const updateStatus = async (vendorId: number | string, newStatus: string) => {
+    try {
+      await api.updateVendorStatus(token!, vendorId, newStatus);
+      setVendors(vendors.map(v => String(v.id) === String(vendorId) ? { ...v, status: newStatus as any } : v));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update vendor status");
+    }
+  };
 
   const filtered = useMemo(() => {
     return vendors.filter((v) => (tab === "All" ? true : v.status === tab)).filter(
@@ -74,7 +88,19 @@ const Vendors = () => {
           status: vendorProfile.status,
           rating: 0,
         }
-      : VENDORS.find((v) => v.id === "v-1")!;
+      : {
+          id: "",
+          name: user?.name ?? "",
+          category: "General",
+          gst: "",
+          contact: "",
+          email: user?.email ?? "",
+          phone: "",
+          address: "",
+          country: "India",
+          status: "Pending",
+          rating: 0,
+        };
     return (
       <div>
         <SectionEyebrow>My Vendor Profile</SectionEyebrow>
@@ -135,17 +161,23 @@ const Vendors = () => {
                 >
                   View
                 </button>
-                {canEdit && (
+                {canEdit && v.status === "Pending" && (
                   <>
-                    <button className="text-primary cursor-pointer font-body">Edit</button>
-                    <button className="text-primary cursor-pointer font-body">Remove</button>
+                    <button onClick={() => updateStatus(v.id, "Active")} className="text-primary cursor-pointer font-body">Approve</button>
+                    <button onClick={() => updateStatus(v.id, "Removed")} className="text-primary cursor-pointer font-body">Reject</button>
                   </>
+                )}
+                {canEdit && v.status === "Active" && (
+                  <button onClick={() => updateStatus(v.id, "Blacklisted")} className="text-primary cursor-pointer font-body text-[#c4313b]">Blacklist</button>
+                )}
+                {canEdit && (v.status === "Removed" || v.status === "Blacklisted") && (
+                  <button onClick={() => updateStatus(v.id, "Active")} className="text-primary cursor-pointer font-body">Restore</button>
                 )}
               </div>
             </Td>
           </tr>
         ))}
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !loading && (
           <tr>
             <td colSpan={6} className="font-body text-[15px] text-ink-soft px-4 py-6 border-t border-hairline-soft text-center">
               No vendors match your filter.
@@ -154,7 +186,7 @@ const Vendors = () => {
         )}
       </Table>
 
-      {adding && <AddVendorModal onClose={() => setAdding(false)} />}
+      {adding && <AddVendorModal onClose={() => setAdding(false)} onSuccess={loadVendors} token={token!} />}
       {detail && (
         <Modal title={detail.name} onClose={() => setDetail(null)}>
           <VendorDetail vendor={detail} />
@@ -198,10 +230,14 @@ const VendorDetail = ({ vendor }: { vendor: Vendor }) => (
   </div>
 );
 
-const AddVendorModal = ({ onClose }: { onClose: () => void }) => {
-  const [name, setName] = useState("");
+const AddVendorModal = ({ onClose, onSuccess, token }: { onClose: () => void; onSuccess: () => void; token: string }) => {
+  const [companyName, setCompanyName] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gstDetails, setGstDetails] = useState("");
+  const [category, setCategory] = useState("Office Supplies");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -212,10 +248,21 @@ const AddVendorModal = ({ onClose }: { onClose: () => void }) => {
     setError("");
     setMessage("");
     try {
-      await api.register({ name, email, password, role: "vendor" });
-      setMessage("Vendor account created. The vendor can sign in and complete company details.");
+      await api.createVendorByStaff(token, {
+        name: contactPerson.trim() || companyName.trim(),
+        email: email.trim(),
+        password,
+        company_name: companyName.trim(),
+        contact_person: contactPerson.trim() || undefined,
+        phone: phone.trim() || undefined,
+        gst_details: gstDetails.trim() || undefined,
+        category,
+      });
+      setMessage("Vendor created successfully with login credentials!");
+      onSuccess();
+      setTimeout(() => onClose(), 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create vendor account.");
+      setError(err instanceof Error ? err.message : "Unable to create vendor.");
     } finally {
       setLoading(false);
     }
@@ -225,16 +272,29 @@ const AddVendorModal = ({ onClose }: { onClose: () => void }) => {
     <Modal title="Add Vendor" onClose={onClose}>
       <form onSubmit={submit}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-          <Field label="Vendor Name"><TextInput required value={name} onChange={(e) => setName(e.target.value)} placeholder="Company or contact name" /></Field>
-          <Field label="Email"><TextInput required value={email} onChange={(e) => setEmail(e.target.value)} type="email" /></Field>
-          <Field label="Temporary Password"><TextInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} type="password" /></Field>
+          <Field label="Company Name"><TextInput required value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Registered company name" /></Field>
+          <Field label="Contact Person"><TextInput value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Primary contact name" /></Field>
+          <Field label="Email"><TextInput required value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="vendor@company.com" /></Field>
+          <Field label="Temporary Password"><TextInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Min 8 characters" /></Field>
+          <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 ..." /></Field>
+          <Field label="GST Details"><TextInput value={gstDetails} onChange={(e) => setGstDetails(e.target.value)} placeholder="GSTIN" /></Field>
+          <Field label="Category">
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option>Office Supplies</option>
+              <option>Furniture</option>
+              <option>IT Hardware</option>
+              <option>Logistics</option>
+              <option>Services</option>
+              <option>Other</option>
+            </Select>
+          </Field>
           <Field label="Role"><TextInput value="Vendor" disabled /></Field>
         </div>
         {error && <p className="font-body text-[14px] text-[#c4313b] mb-3">{error}</p>}
-        {message && <p className="font-body text-[15px] text-ink-soft mb-3">{message}</p>}
+        {message && <p className="font-body text-[15px] text-[#2d8a4e] mb-3">{message}</p>}
         <div className="flex justify-end gap-3 mt-3">
           <ButtonSecondary onClick={onClose}>Cancel</ButtonSecondary>
-          <ButtonPrimary type="submit">{loading ? "Saving..." : "Create Vendor Login"}</ButtonPrimary>
+          <ButtonPrimary type="submit">{loading ? "Creating..." : "Create Vendor"}</ButtonPrimary>
         </div>
       </form>
     </Modal>

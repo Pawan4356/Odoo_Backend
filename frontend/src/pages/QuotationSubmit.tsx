@@ -12,22 +12,23 @@ import {
   ButtonSecondary,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { RFQS, inr } from "../data/mock";
+import { inr } from "../data/mock";
 import { api } from "../api/client";
+import type { RFQ } from "../types";
 
-const DEFAULT_RFQ = RFQS.find((r) => r.id === "RFQ-2026-014")!;
+const EMPTY_RFQ: RFQ = { id: "", title: "Loading...", category: "", deadline: "", description: "", status: "Active", items: [], vendorIds: [], createdBy: "" };
 
 const QuotationSubmit = () => {
   const { user, token, vendorProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const role = user!.role;
-  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? DEFAULT_RFQ.id;
-  const [rfq, setRfq] = useState(DEFAULT_RFQ);
+  const rfqId = (location.state as { rfqId?: string } | null)?.rfqId ?? "";
+  const [rfq, setRfq] = useState<RFQ>(EMPTY_RFQ);
 
   // pricing state, one entry per RFQ item
-  const [prices, setPrices] = useState<number[]>(DEFAULT_RFQ.items.map(() => 0));
-  const [delivery, setDelivery] = useState<number[]>(DEFAULT_RFQ.items.map(() => 7));
+  const [prices, setPrices] = useState<number[]>([]);
+  const [delivery, setDelivery] = useState<number[]>([]);
   const [tax, setTax] = useState(18);
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -36,15 +37,32 @@ const QuotationSubmit = () => {
 
   useEffect(() => {
     if (!token || !/^\d+$/.test(rfqId)) return;
-    api
-      .rfq(token, rfqId)
-      .then((row) => {
+    Promise.all([
+      api.rfq(token, rfqId),
+      api.quotationsByRFQ(token, rfqId).catch(() => [])
+    ])
+      .then(([row, quotes]) => {
         setRfq(row);
-        setPrices(row.items.map(() => 0));
-        setDelivery(row.items.map(() => 7));
+        const existing = quotes.find((q) => q.vendorId === String(vendorProfile?.id));
+        if (existing) {
+          setSubmitted(true);
+          setNotes(existing.notes || "");
+          setPrices(row.items.map((it) => {
+            // Map back by order or name
+            const match = existing.lines.find((l) => l.name.includes(it.name) || it.name.includes(l.name));
+            return match ? match.unitPrice : 0;
+          }));
+          setDelivery(row.items.map((it) => {
+            const match = existing.lines.find((l) => l.name.includes(it.name) || it.name.includes(l.name));
+            return match ? match.deliveryDays : 7;
+          }));
+        } else {
+          setPrices(row.items.map(() => 0));
+          setDelivery(row.items.map(() => 7));
+        }
       })
       .catch(() => undefined);
-  }, [rfqId, token]);
+  }, [rfqId, token, vendorProfile?.id]);
 
   const readOnly = role !== "vendor" || submitted;
 

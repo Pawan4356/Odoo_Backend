@@ -28,7 +28,7 @@ export interface VendorProfile {
   status: VendorStatus;
 }
 
-export type VendorStatus = "Active" | "Pending" | "Removed";
+export type VendorStatus = "Active" | "Pending" | "Removed" | "Blacklisted";
 
 export interface Vendor {
   id: string;
@@ -87,6 +87,7 @@ export interface Quotation {
   lines: QuoteLine[];
   taxPct: number;
   notes: string;
+  deliveryTimeline?: string;
   paymentTermDays: number;
 }
 

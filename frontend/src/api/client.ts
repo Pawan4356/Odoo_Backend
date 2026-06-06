@@ -78,6 +78,82 @@ type BackendPO = {
   total_amount?: number | string | null;
   status?: "Draft" | "Issued" | "Fulfilled";
   created_at?: string;
+  rfq_id?: number | string;
+  vendor_id?: number | string;
+  rfq_title?: string;
+  vendor_name?: string;
+  contact_person?: string;
+  vendor_phone?: string;
+  gst_details?: string;
+  vendor_category?: string;
+  vendor_email?: string;
+  buyer_name?: string;
+  buyer_email?: string;
+  delivery_timeline?: string;
+  notes?: string;
+  items?: {
+    name: string;
+    quantity: number;
+    unit_price: number | string;
+    delivery_days: number;
+  }[];
+};
+
+// Richer PO type that carries vendor/buyer info for the Invoices page
+export interface RichPO extends PurchaseOrder {
+  vendorName: string;
+  vendorEmail: string;
+  vendorGst: string;
+  vendorContact: string;
+  vendorPhone: string;
+  vendorCategory: string;
+  buyerName: string;
+  buyerEmail: string;
+  rfqTitle: string;
+}
+
+// Backend approval row shape
+export type BackendApproval = {
+  quotation_id: number | string;
+  quotation_status: string;
+  delivery_timeline?: string | null;
+  notes?: string | null;
+  quotation_created_at?: string;
+  rfq_id: number | string;
+  rfq_title: string;
+  vendor_id: number | string;
+  vendor_name: string;
+  approval_id?: number | string | null;
+  approval_status?: string | null;
+  remarks?: string | null;
+  approval_created_at?: string | null;
+  manager_name?: string | null;
+  total_amount: number | string;
+};
+
+// Report data shape from backend
+export type ReportData = {
+  summary: {
+    totalSpend: number;
+    activeVendors: number;
+    poFulfilledPct: number;
+    pendingIssues: number;
+  };
+  categorySpend: { label: string; value: number }[];
+  topVendors: { name: string; spend: number; pos: number }[];
+  monthly: { m: string; v: number }[];
+};
+
+// Activity item from backend
+export type ActivityItem = {
+  id: number | string;
+  category: string;
+  title: string;
+  description: string;
+  at: string;
+  actorRole?: string;
+  targetType?: string;
+  targetId?: number | string;
 };
 
 export class ApiError extends Error {
@@ -151,10 +227,25 @@ const mapRFQStatus = (status?: BackendRFQ["status"]): RFQStatus => {
   return "Closed";
 };
 
+/**
+ * Parse category from the RFQ description.
+ * When creating an RFQ, description is stored as "Category — actual description"
+ */
+const parseRFQCategory = (description?: string | null): string => {
+  if (!description) return "General";
+  const dashIdx = description.indexOf(" — ");
+  if (dashIdx > 0) return description.slice(0, dashIdx).trim();
+  // Fallback: check if entire description is a known category
+  const knownCategories = ["Hardware", "Software", "Office Supplies", "Services", "Furniture", "IT Hardware", "Logistics", "Other"];
+  const trimmed = description.trim();
+  if (knownCategories.includes(trimmed)) return trimmed;
+  return "General";
+};
+
 export const mapRFQ = (r: BackendRFQ): RFQ => ({
   id: String(r.id),
   title: r.title,
-  category: "General",
+  category: parseRFQCategory(r.description),
   deadline: String(r.deadline).slice(0, 10),
   description: r.description || "",
   status: mapRFQStatus(r.status),
@@ -189,30 +280,49 @@ export const mapQuotation = (q: BackendQuotation): Quotation & { vendorName?: st
     })) ?? [],
   taxPct: 0,
   notes: q.notes || "",
+  deliveryTimeline: q.delivery_timeline || "N/A",
   paymentTermDays: 0,
   vendorName: q.company_name || undefined,
   totalAmount: q.total_amount == null ? undefined : Number(q.total_amount),
 });
 
-export const mapPO = (p: BackendPO): PurchaseOrder => ({
+export const mapPO = (p: BackendPO): RichPO => ({
   id: p.po_number || String(p.id),
-  rfqId: "",
-  vendorId: "",
+  rfqId: String(p.rfq_id ?? ""),
+  vendorId: String(p.vendor_id ?? ""),
   poDate: String(p.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
   invoiceDate: String(p.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
   dueDate: "",
-  lines: [
-    {
-      name: `Approved quotation ${p.quotation_id ?? ""}`.trim(),
-      quantity: 1,
-      unitPrice: Number(p.total_amount ?? 0),
-      deliveryDays: 0,
-    },
-  ],
+  lines:
+    p.items && Array.isArray(p.items) && p.items.length > 0
+      ? p.items.map((item) => ({
+          name: item.name || "Item",
+          quantity: Number(item.quantity ?? 1),
+          unitPrice: Number(item.unit_price ?? 0),
+          deliveryDays: Number(item.delivery_days ?? 0),
+        }))
+      : [
+          {
+            name: `Approved quotation ${p.quotation_id ?? ""}`.trim(),
+            quantity: 1,
+            unitPrice: Number(p.total_amount ?? 0),
+            deliveryDays: 0,
+          },
+        ],
   taxPct: 0,
   discount: 0,
   payment: p.status === "Fulfilled" ? "Paid" : "Pending Payment",
   status: p.status === "Fulfilled" ? "Completed" : "Issued",
+  // Rich fields
+  vendorName: p.vendor_name || "Vendor",
+  vendorEmail: p.vendor_email || "",
+  vendorGst: p.gst_details || "",
+  vendorContact: p.contact_person || "",
+  vendorPhone: p.vendor_phone || "",
+  vendorCategory: p.vendor_category || "",
+  buyerName: p.buyer_name || "Procurement Team",
+  buyerEmail: p.buyer_email || "",
+  rfqTitle: p.rfq_title || `RFQ ${p.rfq_id ?? ""}`,
 });
 
 const parseError = async (res: Response) => {
@@ -279,6 +389,50 @@ export const api = {
     return mapVendorProfile(vendor);
   },
 
+  getMyVendorProfile: async (token: string): Promise<VendorProfile | null> => {
+    const vendor = await request<BackendVendor | null>("/vendors/me", {}, token);
+    return vendor ? mapVendorProfile(vendor) : null;
+  },
+
+  updateVendorProfile: async (
+    token: string,
+    payload: {
+      company_name: string;
+      contact_person?: string;
+      phone?: string;
+      gst_details?: string;
+      category?: string;
+    },
+  ) => {
+    const vendor = await request<BackendVendor>(
+      "/vendors/me",
+      { method: "PUT", body: JSON.stringify(payload) },
+      token,
+    );
+    return mapVendorProfile(vendor);
+  },
+
+  createVendorByStaff: async (
+    token: string,
+    payload: {
+      name?: string;
+      email: string;
+      password: string;
+      company_name: string;
+      contact_person?: string;
+      phone?: string;
+      gst_details?: string;
+      category?: string;
+    },
+  ) => {
+    const vendor = await request<BackendVendor>(
+      "/vendors/staff",
+      { method: "POST", body: JSON.stringify(payload) },
+      token,
+    );
+    return mapVendor(vendor);
+  },
+
   vendors: async (token: string) => {
     const vendors = await request<BackendVendor[]>("/vendors", {}, token);
     return vendors.map(mapVendor);
@@ -329,8 +483,35 @@ export const api = {
       token,
     ),
 
-  purchaseOrders: async (token: string) => {
+  getApprovals: async (token: string): Promise<BackendApproval[]> => {
+    const rows = await request<BackendApproval[]>("/approvals", {}, token);
+    return rows;
+  },
+
+  purchaseOrders: async (token: string): Promise<RichPO[]> => {
     const pos = await request<BackendPO[]>("/pos", {}, token);
     return pos.map(mapPO);
   },
+
+  getReports: async (token: string): Promise<ReportData> => {
+    return request<ReportData>("/reports", {}, token);
+  },
+
+  getActivity: async (token: string): Promise<ActivityItem[]> => {
+    return request<ActivityItem[]>("/activity", {}, token);
+  },
+
+  updateVendorStatus: (token: string, vendorId: number | string, status: string) =>
+    request<unknown>(`/vendors/${vendorId}/status`, { method: "PUT", body: JSON.stringify({ status }) }, token),
+
+  getUsers: (token: string) => request<any[]>("/users", {}, token),
+  
+  createUser: (token: string, payload: any) => 
+    request<any>("/users", { method: "POST", body: JSON.stringify(payload) }, token),
+  
+  updateUserStatus: (token: string, userId: number | string, payload: any) => 
+    request<any>(`/users/${userId}/status`, { method: "PUT", body: JSON.stringify(payload) }, token),
+  
+  resetPassword: (token: string, userId: number | string, newPassword: string) => 
+    request<any>(`/users/${userId}/reset-password`, { method: "POST", body: JSON.stringify({ newPassword }) }, token),
 };

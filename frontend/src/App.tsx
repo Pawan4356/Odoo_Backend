@@ -18,6 +18,7 @@ import Vendors from "./pages/Vendors";
 import RFQList from "./pages/RFQList";
 import RFQCreate from "./pages/RFQCreate";
 import QuotationSubmit from "./pages/QuotationSubmit";
+import QuotationsList from "./pages/QuotationsList";
 import QuotationCompare from "./pages/QuotationCompare";
 import Approvals from "./pages/Approvals";
 import Invoices from "./pages/Invoices";
@@ -60,24 +61,42 @@ const Protected = ({
   return shell ? <AppShell>{children}</AppShell> : <>{children}</>;
 };
 
+/* Wrapper for VendorRegistration: show in AppShell if editing, bare if first-time */
+const VendorRegistrationRoute = () => {
+  const { vendorProfileComplete } = useAuth();
+  return vendorProfileComplete ? (
+    <Protected guardPath="/vendor-registration">
+      <VendorRegistration />
+    </Protected>
+  ) : (
+    <Protected shell={false}>
+      <VendorRegistration />
+    </Protected>
+  );
+};
+
+import Users from "./pages/Users";
+
 const App = () => (
   <AuthProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/vendor-registration" element={<Protected shell={false}><VendorRegistration /></Protected>} />
+        <Route path="/vendor-registration" element={<VendorRegistrationRoute />} />
 
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/vendors" element={<Protected guardPath="/vendors"><Vendors /></Protected>} />
         <Route path="/rfqs" element={<Protected guardPath="/rfqs"><RFQList /></Protected>} />
         <Route path="/rfqs/new" element={<Protected guardPath="/rfqs"><RFQCreate /></Protected>} />
-        <Route path="/quotations" element={<Protected guardPath="/quotations"><QuotationCompare /></Protected>} />
+        <Route path="/quotations" element={<Protected guardPath="/quotations"><QuotationsList /></Protected>} />
+        <Route path="/quotations/compare" element={<Protected guardPath="/quotations"><QuotationCompare /></Protected>} />
         <Route path="/quotations/submit" element={<Protected guardPath="/quotations"><QuotationSubmit /></Protected>} />
         <Route path="/approvals" element={<Protected guardPath="/approvals"><Approvals /></Protected>} />
         <Route path="/invoices" element={<Protected guardPath="/invoices"><Invoices /></Protected>} />
         <Route path="/activity" element={<Protected guardPath="/activity"><Activity /></Protected>} />
         <Route path="/reports" element={<Protected guardPath="/reports"><Reports /></Protected>} />
+        <Route path="/users" element={<Protected><Users /></Protected>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
