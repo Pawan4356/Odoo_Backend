@@ -68,7 +68,7 @@ export const ButtonPrimary = ({
   children,
   onClick,
   type = "button",
-  disabled = false,
+  disabled,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -78,8 +78,8 @@ export const ButtonPrimary = ({
   <button
     type={type}
     onClick={onClick}
+    className="press active:press-active inline-flex items-center justify-center rounded-pill bg-primary text-on-primary font-ui text-[17px] px-[22px] py-[10px] cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-primary-focus"
     disabled={disabled}
-    className="press active:press-active inline-flex items-center justify-center rounded-pill bg-primary text-on-primary font-ui text-[17px] px-[22px] py-[10px] cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-primary-focus disabled:opacity-50 disabled:pointer-events-none"
   >
     {children}
   </button>
@@ -152,11 +152,10 @@ export const FilterTabs = ({
       <button
         key={t}
         onClick={() => onChange(t)}
-        className={`press active:press-active font-ui text-[14px] px-4 py-1.5 rounded-pill cursor-pointer transition-colors ${
-          active === t
+        className={`press active:press-active font-ui text-[14px] px-4 py-1.5 rounded-pill cursor-pointer transition-colors ${active === t
             ? "bg-canvas text-ink shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
             : "bg-transparent text-ink-soft"
-        }`}
+          }`}
       >
         {t}
       </button>
@@ -266,20 +265,18 @@ export const StepIndicator = ({
       return (
         <div key={s} className="flex items-center gap-2 shrink-0">
           <span
-            className={`rounded-full w-7 h-7 flex items-center justify-center font-ui text-[13px] font-semibold ${
-              active
+            className={`rounded-full w-7 h-7 flex items-center justify-center font-ui text-[13px] font-semibold ${active
                 ? "bg-primary text-on-primary"
                 : done
-                ? "bg-primary/10 text-primary"
-                : "bg-parchment text-ink-faint border border-hairline"
-            }`}
+                  ? "bg-primary/10 text-primary"
+                  : "bg-parchment text-ink-faint border border-hairline"
+              }`}
           >
             {done ? "✓" : n}
           </span>
           <span
-            className={`font-ui text-[14px] ${
-              active ? "text-ink font-medium" : "text-ink-soft"
-            }`}
+            className={`font-ui text-[14px] ${active ? "text-ink font-medium" : "text-ink-soft"
+              }`}
           >
             {s}
           </span>
